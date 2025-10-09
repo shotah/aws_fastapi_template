@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+jmespath = "*"
+aws-lambda-powertools = {extras = ["tracer"], version = "*"}
+pre-commit = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pre-commit = "*"
+isort = "*"
+black = "*"
+requests-mock = {extras = ["fixture"], version = "*"}
+flake8 = "*"
+Flake8-pyproject = "*"
+flake8-annotations-complexity = "*"
+flake8-expression-complexity = "*"
+flake8-cognitive-complexity = "*"
+flake8-adjustable-complexity = "*"
+
+[requires]
+python_version = "3.13.8"

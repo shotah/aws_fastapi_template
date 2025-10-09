@@ -1,0 +1,84 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "ms-python.black-formatter",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "[markdown]": {
+    "editor.tabSize": 2
+  },
+  "[makefile]": {
+    "editor.formatOnSave": false,
+    "editor.insertSpaces": false,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "files.eol": "\n",
+  "files.autoSave": "off",
+  "files.trimFinalNewlines": true,
+  "files.associations": {},
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.formatting.provider": "none",
+  "isort.check": true,
+  "cSpell.words": [
+    "addopts",
+    "apigw",
+    "asciidoc",
+    "autopep",
+    "celerybeat",
+    "Connor",
+    "dmypy",
+    "exitfirst",
+    "FASTAPI",
+    "flake",
+    "htmlcov",
+    "ipynb",
+    "ipython",
+    "isort",
+    "jmespath",
+    "KHTML",
+    "lambdas",
+    "Logformat",
+    "millis",
+    "mkdocs",
+    "mypy",
+    "nosetests",
+    "pipenv",
+    "Pipfile",
+    "powertools",
+    "pycache",
+    "pyenv",
+    "pyflow",
+    "pypa",
+    "pypackages",
+    "pyproject",
+    "pytest",
+    "pythonpath",
+    "ropeproject",
+    "samconfig",
+    "scrapy",
+    "sdist",
+    "Spyder",
+    "spyderproject",
+    "spyproject",
+    "testpaths",
+    "toml",
+    "venv",
+    "VIRTUALENVS",
+    "webassets",
+    "wsgi"
+  ]
+}
