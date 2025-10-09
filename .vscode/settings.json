@@ -67,6 +67,7 @@
     "pyproject",
     "pytest",
     "pythonpath",
+    "pyupgrade",
     "ropeproject",
     "samconfig",
     "scrapy",

@@ -623,13 +623,206 @@ pipenv run pytest
 sam build
 ```
 
-## Additional Resources
+## CI/CD with GitHub Actions
+
+This project is ready for automated deployment using GitHub Actions. Here's how to set it up:
+
+### Setting Up GitHub Actions
+
+1. **Create the workflow directory:**
+   ```bash
+   mkdir -p .github/workflows
+   ```
+
+2. **Create `.github/workflows/deploy.yml`:**
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install pipenv
+          pipenv install --dev
+
+      - name: Run linters
+        run: |
+          pipenv run pre-commit run --all-files
+
+      - name: Run tests
+        run: |
+          pipenv run pytest --cov=. --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up AWS SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Build SAM application
+        run: sam build --use-container
+
+      - name: Deploy SAM application
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name ${{ secrets.AWS_STACK_NAME }} \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ secrets.AWS_REGION }}
+```
+
+### GitHub Secrets Configuration
+
+Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `AWS_ACCESS_KEY_ID` | AWS access key for deployment | `AKIAIOSFODNN7EXAMPLE` |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret access key | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `AWS_REGION` | AWS region to deploy to | `us-east-1` |
+| `AWS_STACK_NAME` | CloudFormation stack name | `my-lambda-api` |
+
+**Security Best Practice:** Use OIDC authentication instead of long-lived credentials. See [Using OIDC with GitHub Actions](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html).
+
+### Advanced: Using OIDC (Recommended)
+
+OIDC is more secure than storing AWS credentials:
+
+```yaml
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsRole
+    role-session-name: GitHubActionsSession
+    aws-region: us-east-1
+```
+
+To set up OIDC:
+
+1. **Create an OIDC provider in AWS IAM:**
+   - Provider URL: `https://token.actions.githubusercontent.com`
+   - Audience: `sts.amazonaws.com`
+
+2. **Create an IAM role** with trust policy:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Workflow Features
+
+The provided workflow:
+
+- ✅ **Runs tests on PRs** - Ensures code quality before merging
+- ✅ **Lints code** - Runs pre-commit hooks automatically
+- ✅ **Code coverage** - Uploads coverage reports to Codecov
+- ✅ **Auto-deploys on main** - Deploys only after tests pass
+- ✅ **Uses containers** - Builds Lambda in Docker for consistency
+
+### Environment-Specific Deployments
+
+For multiple environments (dev, staging, prod):
+
+```yaml
+deploy-dev:
+  runs-on: ubuntu-latest
+  needs: test
+  if: github.ref == 'refs/heads/develop'
+  environment: development
+  steps:
+    # ... same as above but with dev stack name
+
+deploy-prod:
+  runs-on: ubuntu-latest
+  needs: test
+  if: github.ref == 'refs/heads/main'
+  environment: production
+  steps:
+    # ... same as above but with prod stack name
+```
+
+### Local Testing of GitHub Actions
+
+Test your workflow locally with [act](https://github.com/nektos/act):
+
+```bash
+# Install act
+choco install act-cli  # Windows
+brew install act       # macOS
+
+# Run the workflow locally
+act push
+
+# Run specific job
+act -j test
+```
+
+### Additional Resources
 
 - [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
+- [GitHub Actions for AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/deploying-using-github.html)
 - [AWS Lambda Powertools Python](https://awslabs.github.io/aws-lambda-powertools-python/)
 - [Pipenv Documentation](https://pipenv.pypa.io/)
 - [Black Code Style](https://black.readthedocs.io/)
 - [Pytest Documentation](https://docs.pytest.org/)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
 
 ## Getting Help
 

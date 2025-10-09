@@ -1,6 +1,7 @@
 .SILENT: # Disable echo of commands
 ifneq ("$(wildcard .env)", "")
-# MAKE SURE THIS IS SPACES AND NOT TAB!!!
+# Import .env file if it exists
+# MAKE SURE THIS IS SPACES AND NOT A TAB
     include .env
 endif
 
@@ -126,8 +127,8 @@ start: build ## Start local API Gateway (requires Docker)
 	@test -f env.json && sam local start-api --env-vars env.json || sam local start-api
 
 PHONY: invoke
-invoke: build ## Invoke Lambda function locally with test event
-	sam local invoke "HelloWorldFunction" -e events/hello.json
+invoke: build ## Invoke Lambda function locally with test event (Broken in Make, but works in CLI)
+	sam local invoke --event events/hello.json HelloWorldFunction
 
 PHONY: deploy
 deploy: build aws-check ## Deploy to AWS (requires AWS credentials)
