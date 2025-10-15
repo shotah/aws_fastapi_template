@@ -128,13 +128,17 @@ test-failed: ## Re-run only failed tests
 
 PHONY: build
 build: ## Build SAM application in container
-	pipenv run pip freeze > requirements.txt
+	pipenv requirements > requirements.txt
 	sam build -c --use-container
 
 PHONY: build-no-container
 build-no-container: ## Build SAM application without container (alternative if container build fails)
-	pipenv run pip freeze > requirements.txt
+	pipenv requirements > requirements.txt
 	sam build -c
+
+PHONY: requirements-dev
+requirements-dev: ## Generate requirements-dev.txt with all dependencies (including dev)
+	pipenv requirements --dev > requirements-dev.txt
 
 PHONY: start
 start: build ## Start local API Gateway (requires Docker)
