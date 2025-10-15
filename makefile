@@ -75,8 +75,7 @@ aws-check: ## Check AWS credentials configuration
 
 PHONY: clean
 clean: ## Clean build artifacts and remove virtual environment
-	rm -rf .aws-sam
-	pipenv run python -c "import os; os.remove('requirements.txt')" || echo "no requirements.txt to remove"
+	pipenv run python -c "import os; os.remove('requirements.txt')" || echo "no lock file to remove"
 	pipenv run python -c "import os; os.remove('Pipfile.lock')" || echo "no lock file to remove"
 	pipenv --rm || echo "no environment found to remove"
 
