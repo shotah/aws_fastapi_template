@@ -44,6 +44,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Clean build artifacts and virtual env"
+	@echo "  make clean-cache     Clean SAM build cache and Docker containers"
 	@echo "  make all             Run full setup (hooks, install, lint, test)"
 	@echo ""
 	@echo "Quick Start:"
@@ -78,6 +79,15 @@ clean: ## Clean build artifacts and remove virtual environment
 	pipenv run python -c "import os; os.remove('requirements.txt')" || echo "no lock file to remove"
 	pipenv run python -c "import os; os.remove('Pipfile.lock')" || echo "no lock file to remove"
 	pipenv --rm || echo "no environment found to remove"
+
+PHONY: clean-cache
+clean-cache: ## Clean SAM build cache and layers
+	@echo "Cleaning SAM build cache..."
+	@if exist .aws-sam rmdir /s /q .aws-sam
+	@if exist .aws-sam echo "Removed .aws-sam directory"
+	@echo "Cleaning Docker containers and images..."
+	@docker system prune -f
+	@echo "Cache cleaned successfully"
 
 PHONY: hooks
 hooks: ## Install git pre-commit hooks
@@ -121,9 +131,14 @@ build: ## Build SAM application in container
 	pipenv run pip freeze > requirements.txt
 	sam build -c --use-container
 
+PHONY: build-no-container
+build-no-container: ## Build SAM application without container (alternative if container build fails)
+	pipenv run pip freeze > requirements.txt
+	sam build -c
+
 PHONY: start
 start: build ## Start local API Gateway (requires Docker)
-	@test -f env.json && sam local start-api --env-vars env.json || sam local start-api
+	@test -f env.json && sam local start-api --env-vars env.json --skip-pull-image || sam local start-api --skip-pull-image
 
 PHONY: invoke
 invoke: build ## Invoke Lambda function locally with test event (Broken in Make, but works in CLI)
