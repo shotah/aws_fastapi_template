@@ -1,0 +1,61 @@
+{
+  "body": "{\"name\": \"John Doe\", \"email\": \"john@example.com\", \"age\": 30, \"is_active\": true}",
+  "headers": {
+    "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Content-Type": "application/json",
+    "Connection": "keep-alive",
+    "Host": "127.0.0.1:3000",
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+    "X-Forwarded-Port": "3000",
+    "X-Forwarded-Proto": "http"
+  },
+  "httpMethod": "POST",
+  "isBase64Encoded": false,
+  "multiValueHeaders": {
+    "Accept": ["application/json"],
+    "Accept-Encoding": ["gzip, deflate, br"],
+    "Content-Type": ["application/json"],
+    "Connection": ["keep-alive"],
+    "Host": ["127.0.0.1:3000"],
+    "User-Agent": [
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+    ],
+    "X-Forwarded-Port": ["3000"],
+    "X-Forwarded-Proto": ["http"]
+  },
+  "multiValueQueryStringParameters": "",
+  "path": "/users",
+  "pathParameters": "",
+  "queryStringParameters": "",
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "1234567890",
+    "domainName": "127.0.0.1:3000",
+    "extendedRequestId": "",
+    "httpMethod": "POST",
+    "identity": {
+      "accountId": "",
+      "apiKey": "",
+      "caller": "",
+      "cognitoAuthenticationProvider": "",
+      "cognitoAuthenticationType": "",
+      "cognitoIdentityPoolId": "",
+      "sourceIp": "127.0.0.1",
+      "user": "",
+      "userAgent": "Custom User Agent String",
+      "userArn": ""
+    },
+    "path": "/users",
+    "protocol": "HTTP/1.1",
+    "requestId": "b4691568-dbd3-5g21-9gd0-f58225ce8d73",
+    "requestTime": "29/Oct/2025:15:30:00 +0000",
+    "requestTimeEpoch": 1730217000,
+    "resourceId": "234567",
+    "resourcePath": "/users",
+    "stage": "Prod"
+  },
+  "resource": "/users",
+  "stageVariables": "",
+  "version": "1.0"
+}

@@ -128,13 +128,13 @@ test-failed: ## Re-run only failed tests
 
 PHONY: build
 build: ## Build SAM application in container
-	pipenv requirements > requirements.txt
-	sam build -c --use-container
+	pipenv requirements --from-pipfile > ./src/requirements.txt
+	sam build --use-container
 
 PHONY: build-no-container
 build-no-container: ## Build SAM application without container (alternative if container build fails)
-	pipenv requirements > requirements.txt
-	sam build -c
+	pipenv requirements --from-pipfile > ./src/requirements.txt
+	sam build
 
 PHONY: requirements-dev
 requirements-dev: ## Generate requirements-dev.txt with all dependencies (including dev)
@@ -142,7 +142,7 @@ requirements-dev: ## Generate requirements-dev.txt with all dependencies (includ
 
 PHONY: start
 start: build ## Start local API Gateway (requires Docker)
-	@test -f env.json && sam local start-api --env-vars env.json --skip-pull-image || sam local start-api --skip-pull-image
+	@if exist env.json (sam local start-api --env-vars env.json --skip-pull-image) else (sam local start-api --skip-pull-image)
 
 PHONY: invoke
 invoke: build ## Invoke Lambda function locally with test event (Broken in Make, but works in CLI)

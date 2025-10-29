@@ -21,8 +21,8 @@ Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
-      Handler: src.app.lambda_handler
-      CodeUri: .
+      Handler: app.lambda_handler
+      CodeUri: ./src
       Description: Hello World function
       Architectures:
         - x86_64
@@ -33,6 +33,11 @@ Resources:
           Properties:
             Path: /hello
             Method: GET
+        UsersPath:
+          Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+          Properties:
+            Path: /users
+            Method: POST
       # Environment variables for Lambda function
       # - For local dev: Use env.json (see env.json.example)
       # - For production: Add variables below or use Secrets Manager/Parameter Store

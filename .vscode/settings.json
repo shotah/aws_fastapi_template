@@ -60,6 +60,7 @@
     "Pipfile",
     "powertools",
     "pycache",
+    "pydantic",
     "pyenv",
     "pyflow",
     "pypa",

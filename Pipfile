@@ -7,6 +7,7 @@ name = "pypi"
 requests = "*"
 jmespath = "*"
 aws-lambda-powertools = {extras = ["tracer"], version = "*"}
+pydantic = "*"
 
 [dev-packages]
 pytest = "*"
@@ -17,6 +18,10 @@ black = "*"
 requests-mock = {extras = ["fixture"], version = "*"}
 flake8 = "*"
 Flake8-pyproject = "*"
+flake8-annotations-complexity = "*"
+flake8-expression-complexity = "*"
+flake8-cognitive-complexity = "*"
+flake8-adjustable-complexity = "*"
 
 [requires]
 python_version = "3.13.8"
