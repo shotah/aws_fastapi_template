@@ -1,11 +1,13 @@
 import json
-
-import pytest
+from typing import Any
 
 from src.app import lambda_handler
+from tests.conftest import MockLambdaContext
 
 
-def _modify_event_for_post_users(event: dict, body_data: dict) -> dict:
+def _modify_event_for_post_users(
+    event: dict[str, Any], body_data: dict[str, Any]
+) -> dict[str, Any]:
     """Helper to modify event for POST /users endpoint"""
     event["httpMethod"] = "POST"
     event["path"] = "/users"
@@ -18,7 +20,9 @@ def _modify_event_for_post_users(event: dict, body_data: dict) -> dict:
     return event
 
 
-def test_lambda_handler(base_apigw_event, lambda_context):
+def test_lambda_handler(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
     """Test the /hello GET endpoint"""
     # Base event is already configured for GET /hello
     ret = lambda_handler(base_apigw_event, lambda_context)
@@ -37,7 +41,9 @@ def test_lambda_handler(base_apigw_event, lambda_context):
     assert data["multiplication_result"] == 42
 
 
-def test_create_user_valid(base_apigw_event, lambda_context):
+def test_create_user_valid(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
     """Test the /users POST endpoint with valid data"""
     event = _modify_event_for_post_users(
         base_apigw_event,
@@ -62,7 +68,9 @@ def test_create_user_valid(base_apigw_event, lambda_context):
     assert data["generated_id"] == 30000  # 30 * 1000
 
 
-def test_create_user_invalid_age(base_apigw_event, lambda_context):
+def test_create_user_invalid_age(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
     """Test the /users POST endpoint with invalid age (validation should fail)"""
     event = _modify_event_for_post_users(
         base_apigw_event,
