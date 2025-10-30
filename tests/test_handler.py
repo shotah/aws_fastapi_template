@@ -1,36 +1,27 @@
 import json
-from pathlib import Path
 
 import pytest
 
 from src.app import lambda_handler
 
 
-def lambda_context():
-    class LambdaContext:
-        def __init__(self):
-            self.function_name = "test-func"
-            self.memory_limit_in_mb = 128
-            self.invoked_function_arn = "arn:aws:lambda:eu-west-1:809313241234:function:test-func"
-            self.aws_request_id = "52fdfc07-2182-154f-163f-5f0f9a621d72"
-
-        def get_remaining_time_in_millis(self) -> int:
-            return 1000
-
-    return LambdaContext()
-
-
-@pytest.fixture()
-def apigw_event():
-    """Loads API Gateway event from JSON fixture file"""
-    fixture_path = Path(__file__).parent / "fixtures" / "apigw_hello_event.json"
-    with open(fixture_path) as f:
-        return json.load(f)
+def _modify_event_for_post_users(event: dict, body_data: dict) -> dict:
+    """Helper to modify event for POST /users endpoint"""
+    event["httpMethod"] = "POST"
+    event["path"] = "/users"
+    event["resource"] = "/users"
+    event["requestContext"]["httpMethod"] = "POST"
+    event["requestContext"]["path"] = "/users"
+    event["requestContext"]["resourcePath"] = "/users"
+    event["body"] = json.dumps(body_data)
+    event["headers"]["Content-Type"] = "application/json"
+    return event
 
 
-def test_lambda_handler(apigw_event):
+def test_lambda_handler(base_apigw_event, lambda_context):
     """Test the /hello GET endpoint"""
-    ret = lambda_handler(apigw_event, lambda_context())
+    # Base event is already configured for GET /hello
+    ret = lambda_handler(base_apigw_event, lambda_context)
     data = json.loads(ret["body"])
 
     assert ret["statusCode"] == 200
@@ -46,17 +37,19 @@ def test_lambda_handler(apigw_event):
     assert data["multiplication_result"] == 42
 
 
-@pytest.fixture()
-def apigw_post_event():
-    """Loads API Gateway POST event from JSON fixture file"""
-    fixture_path = Path(__file__).parent / "fixtures" / "apigw_post_user_event.json"
-    with open(fixture_path) as f:
-        return json.load(f)
-
-
-def test_create_user_valid(apigw_post_event):
+def test_create_user_valid(base_apigw_event, lambda_context):
     """Test the /users POST endpoint with valid data"""
-    ret = lambda_handler(apigw_post_event, lambda_context())
+    event = _modify_event_for_post_users(
+        base_apigw_event,
+        {
+            "name": "John Doe",
+            "email": "john@example.com",
+            "age": 30,
+            "is_active": True,
+        },
+    )
+
+    ret = lambda_handler(event, lambda_context)
     data = json.loads(ret["body"])
 
     assert ret["statusCode"] == 200
@@ -69,27 +62,18 @@ def test_create_user_valid(apigw_post_event):
     assert data["generated_id"] == 30000  # 30 * 1000
 
 
-def test_create_user_invalid_age():
+def test_create_user_invalid_age(base_apigw_event, lambda_context):
     """Test the /users POST endpoint with invalid age (validation should fail)"""
-    invalid_event = {
-        "body": json.dumps({"name": "Jane Doe", "email": "jane@example.com", "age": 200}),
-        "headers": {"Content-Type": "application/json"},
-        "httpMethod": "POST",
-        "path": "/users",
-        "requestContext": {
-            "accountId": "123456789012",
-            "apiId": "1234567890",
-            "httpMethod": "POST",
-            "path": "/users",
-            "protocol": "HTTP/1.1",
-            "requestId": "test-request-id",
-            "resourcePath": "/users",
-            "stage": "Prod",
+    event = _modify_event_for_post_users(
+        base_apigw_event,
+        {
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+            "age": 200,  # Invalid: exceeds max of 150
         },
-        "resource": "/users",
-    }
+    )
 
-    ret = lambda_handler(invalid_event, lambda_context())
+    ret = lambda_handler(event, lambda_context)
 
     # Should return 422 (Unprocessable Entity) due to validation error
     assert ret["statusCode"] == 422
