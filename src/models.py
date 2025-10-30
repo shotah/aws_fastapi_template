@@ -1,6 +1,14 @@
-"""Request and Response models for API endpoints."""
+"""Request and Response models for API endpoints.
+
+This module contains ONLY API contracts (requests and responses).
+Domain models (like User) are imported from helper.py where business logic lives.
+"""
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# Import domain models from helper.py - no circular dependency!
+# helper.py uses TYPE_CHECKING for imports from models.py, so this is safe
+from helper import User
 
 # ============================================================================
 # Request Models
@@ -48,19 +56,15 @@ class HelloResponse(BaseModel):
     multiplication_result: int
 
 
-class UserData(BaseModel):
-    """User data in response."""
-
-    name: str
-    email: str
-    age: int
-    is_active: bool
-
-
 class UserCreateResponse(BaseModel):
-    """Response model for POST /users endpoint."""
+    """
+    Response model for POST /users endpoint.
+
+    Uses the User domain model from helper.py - avoiding duplication!
+    The User class represents business logic, not an API contract,
+    so it lives in helper.py.
+    """
 
     status: str
     message: str
-    user: UserData
-    generated_id: int
+    user: User  # Using domain model directly - no duplication!

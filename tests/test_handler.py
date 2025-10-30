@@ -61,11 +61,12 @@ def test_create_user_valid(
     assert ret["statusCode"] == 200
     assert data["status"] == "success"
     assert "User John Doe created successfully" in data["message"]
+    # User is now a domain model from helper.py with user_id
+    assert data["user"]["user_id"] == 1000  # First user from Users service
     assert data["user"]["name"] == "John Doe"
     assert data["user"]["email"] == "john@example.com"
     assert data["user"]["age"] == 30
     assert data["user"]["is_active"] is True
-    assert data["generated_id"] == 30000  # 30 * 1000
 
 
 def test_create_user_invalid_age(
