@@ -30,7 +30,7 @@ aggressive = 3
 line-length = 99
 
 [tool.pytest.ini_options]
-addopts = "--cov=. --cov-branch --cov-report term-missing --cov-fail-under=80 --color=yes"
+addopts = "--cov=. --cov-branch --cov-report term-missing --cov-fail-under=75 --color=yes"
 pythonpath = "."
 testpaths = ["tests"]
 

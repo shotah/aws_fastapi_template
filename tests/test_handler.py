@@ -26,10 +26,16 @@ def test_lambda_handler(
     """Test the /hello GET endpoint"""
     # Base event is already configured for GET /hello
     ret = lambda_handler(base_apigw_event, lambda_context)
-    data = json.loads(ret["body"])
+    response = json.loads(ret["body"])
 
     assert ret["statusCode"] == 200
-    assert "message" in ret["body"]
+    # Check ApiResponse envelope
+    assert response["success"] is True
+    assert response["error"] is None
+    assert "data" in response
+
+    # Check actual data payload
+    data = response["data"]
     assert data["message"] == "hello world"
     # Test that helper module was called successfully
     assert "helper_module_test" in data
@@ -56,9 +62,16 @@ def test_create_user_valid(
     )
 
     ret = lambda_handler(event, lambda_context)
-    data = json.loads(ret["body"])
+    response = json.loads(ret["body"])
 
     assert ret["statusCode"] == 200
+    # Check ApiResponse envelope
+    assert response["success"] is True
+    assert response["error"] is None
+    assert "data" in response
+
+    # Check actual data payload
+    data = response["data"]
     assert data["status"] == "success"
     assert "User John Doe created successfully" in data["message"]
     # User is now a domain model from helper.py with user_id
@@ -86,3 +99,134 @@ def test_create_user_invalid_age(
 
     # Should return 422 (Unprocessable Entity) due to validation error
     assert ret["statusCode"] == 422
+
+
+def test_scheduled_event(lambda_context: MockLambdaContext) -> None:
+    """Test the Lambda handler with a scheduled EventBridge event"""
+    # Create a mock EventBridge scheduled event
+    scheduled_event = {
+        "version": "0",
+        "id": "89d1a02d-5ec7-412e-82f5-13505f849b41",
+        "detail-type": "Scheduled Event",
+        "source": "aws.events",
+        "account": "123456789012",
+        "time": "2024-01-15T00:00:00Z",
+        "region": "us-east-1",
+        "resources": ["arn:aws:events:us-east-1:123456789012:rule/NightlyProcessing"],
+        "detail": {},
+    }
+
+    ret = lambda_handler(scheduled_event, lambda_context)
+
+    assert ret["statusCode"] == 200
+    assert "Scheduled processing completed successfully" in ret["body"]
+
+
+def test_health_check(base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext) -> None:
+    """Test the /health GET endpoint"""
+    # Modify event for health check
+    base_apigw_event["path"] = "/health"
+    base_apigw_event["resource"] = "/health"
+    base_apigw_event["requestContext"]["path"] = "/health"
+    base_apigw_event["requestContext"]["resourcePath"] = "/health"
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    assert ret["statusCode"] == 200
+    # Check ApiResponse envelope
+    assert response["success"] is True
+    assert response["error"] is None
+    assert "data" in response
+
+    # Check actual health data
+    data = response["data"]
+    assert data["status"] == "healthy"
+    assert "service" in data
+    assert "environment" in data
+    assert "checks" in data
+    assert data["checks"]["lambda"] == "ok"
+
+
+def test_get_user_success(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
+    """Test GET /users/{user_id} with valid user ID"""
+    # Modify event for GET /users/1000
+    base_apigw_event["path"] = "/users/1000"
+    base_apigw_event["resource"] = "/users/{user_id}"
+    base_apigw_event["pathParameters"] = {"user_id": "1000"}
+    base_apigw_event["requestContext"]["path"] = "/users/1000"
+    base_apigw_event["requestContext"]["resourcePath"] = "/users/{user_id}"
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    assert ret["statusCode"] == 200
+    # Check ApiResponse envelope
+    assert response["success"] is True
+    assert response["error"] is None
+    assert "data" in response
+
+    # Check actual user data
+    data = response["data"]
+    assert data["user_id"] == 1000
+    assert data["name"] == "John Doe"
+    assert data["email"] == "john@example.com"
+
+
+def test_get_user_not_found(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
+    """Test GET /users/{user_id} with non-existent user ID"""
+    # Modify event for GET /users/9999
+    base_apigw_event["path"] = "/users/9999"
+    base_apigw_event["resource"] = "/users/{user_id}"
+    base_apigw_event["pathParameters"] = {"user_id": "9999"}
+    base_apigw_event["requestContext"]["path"] = "/users/9999"
+    base_apigw_event["requestContext"]["resourcePath"] = "/users/{user_id}"
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    # Should return 404 with NotFoundError
+    assert ret["statusCode"] == 404
+    # Check ApiResponse envelope for errors
+    assert response["success"] is False
+    assert response["data"] is None
+    assert response["error"] is not None
+
+    # Check error details
+    error = response["error"]
+    assert error["type"] == "NotFoundError"
+    assert "not found" in error["message"]
+    assert error["details"]["resource_type"] == "User"
+    assert error["details"]["resource_id"] == "9999"
+
+
+def test_get_user_invalid_id(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
+    """Test GET /users/{user_id} with invalid user ID format"""
+    # Modify event for GET /users/abc
+    base_apigw_event["path"] = "/users/abc"
+    base_apigw_event["resource"] = "/users/{user_id}"
+    base_apigw_event["pathParameters"] = {"user_id": "abc"}
+    base_apigw_event["requestContext"]["path"] = "/users/abc"
+    base_apigw_event["requestContext"]["resourcePath"] = "/users/{user_id}"
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    # Should return 400 with ValidationError
+    assert ret["statusCode"] == 400
+    # Check ApiResponse envelope for errors
+    assert response["success"] is False
+    assert response["data"] is None
+    assert response["error"] is not None
+
+    # Check error details
+    error = response["error"]
+    assert error["type"] == "ValidationError"
+    assert "Invalid user ID format" in error["message"]
+    assert error["details"]["user_id"] == "abc"

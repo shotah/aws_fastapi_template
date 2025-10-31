@@ -3,21 +3,58 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   AWS_FASTAPI_TEMPLATE
 
-  Powertools example
+  Powertools example with enterprise IAM and resource configurations
+
+Parameters:
+  # IAM Role for Lambda (pre-created by security team)
+  # Uncomment the Role property in HelloWorldFunction to use this
+  LambdaExecutionRoleArn:
+    Type: String
+    Description: ARN of the pre-created IAM role for Lambda execution
+    # Example: arn:aws:iam::123456789012:role/my-lambda-execution-role
+    Default: ""
+
+  # Global environment variables
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  LogLevel:
+    Type: String
+    Description: Application log level
+    Default: INFO
+    AllowedValues:
+      - DEBUG
+      - INFO
+      - WARNING
+      - ERROR
+      - CRITICAL
 
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
-    Timeout: 15
+    Timeout: 150
     MemorySize: 512
     Runtime: python3.13
-
     Tracing: Active
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
+    # Global environment variables for all functions
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        LOG_LEVEL: !Ref LogLevel
   Api:
     TracingEnabled: true
 Resources:
+  # ============================================================================
+  # Lambda Function
+  # ============================================================================
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
@@ -27,35 +64,204 @@ Resources:
       Architectures:
         - x86_64
       Tracing: Active
+      # To use a pre-created IAM role:
+      # 1. Uncomment the line below
+      # 2. Either set LambdaExecutionRoleArn parameter or replace with actual ARN
+      # Role: !Ref LambdaExecutionRoleArn
+      # If Role is not specified, SAM will create one with basic Lambda execution permissions
       Events:
+        HealthCheck:
+          Type: Api # Health check endpoint for monitoring
+          Properties:
+            Path: /health
+            Method: GET
         HelloPath:
           Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
           Properties:
             Path: /hello
             Method: GET
-        UsersPath:
-          Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+        GetUser:
+          Type: Api # Get user by ID
+          Properties:
+            Path: /users/{user_id}
+            Method: GET
+        CreateUser:
+          Type: Api # Create new user
           Properties:
             Path: /users
             Method: POST
+        NightlySchedule:
+          Type: Schedule # More info: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-schedule.html
+          Properties:
+            Description: Trigger Lambda nightly at midnight UTC
+            Enabled: true
+            # Cron format: cron(Minutes Hours Day-of-month Month Day-of-week Year)
+            # This runs at 00:00 UTC every day
+            Schedule: cron(0 0 * * ? *)
+            # Alternative: Use rate expression for simpler schedules
+            # Schedule: rate(1 day)
+            Input: '{"source": "scheduled-event", "action": "nightly-processing"}'
       # Environment variables for Lambda function
       # - For local dev: Use env.json (see env.json.example)
-      # - For production: Add variables below or use Secrets Manager/Parameter Store
-      # - See DEVELOPMENT.md for detailed environment variable guide
+      # - For deployment: Set values below or use Parameters
+      # - For secrets: Use AWS Secrets Manager (see examples below)
       Environment:
         Variables:
           # AWS Lambda Powertools configuration
           # https://awslabs.github.io/aws-lambda-powertools-python/#environment-variables
           POWERTOOLS_SERVICE_NAME: PowertoolsHelloWorld
           POWERTOOLS_METRICS_NAMESPACE: Powertools
-          LOG_LEVEL: INFO
+          ENVIRONMENT: !Ref Environment # Uses Parameter from above
           # Add your custom environment variables here:
           # API_KEY: !Ref ApiKeyParameter
           # DATABASE_URL: !Sub "https://${DatabaseEndpoint}"
-          # SECRET_NAME: my-app/api-key  # For Secrets Manager
+          # S3_BUCKET_NAME: !Ref DataBucket  # Reference S3 bucket
+          # SQS_QUEUE_URL: !Ref ProcessingQueue  # Reference SQS queue
+          # For secrets, use AWS Secrets Manager:
+          # SECRET_ARN: arn:aws:secretsmanager:region:account:secret:name
+          # Then in code: boto3.client('secretsmanager').get_secret_value(SecretId=os.getenv('SECRET_ARN'))
       Tags:
         LambdaPowertools: python
+        Environment: !Ref Environment
 
+  # ============================================================================
+  # S3 Bucket (Commented Example)
+  # ============================================================================
+  # DataBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub "${AWS::StackName}-data-${Environment}"
+  #     # Enable versioning for data protection
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     # Encryption at rest
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     # Block public access
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     # Lifecycle rules (optional)
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldVersions
+  #           Status: Enabled
+  #           NoncurrentVersionExpirationInDays: 90
+  #         - Id: TransitionToIA
+  #           Status: Enabled
+  #           Transitions:
+  #             - TransitionInDays: 30
+  #               StorageClass: STANDARD_IA
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Purpose
+  #         Value: Application Data Storage
+
+  # ============================================================================
+  # SQS Queue (Commented Example)
+  # ============================================================================
+  # ProcessingQueue:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     QueueName: !Sub "${AWS::StackName}-processing-${Environment}"
+  #     # Message retention period (4 days)
+  #     MessageRetentionPeriod: 345600
+  #     # Visibility timeout (should be 6x Lambda timeout)
+  #     VisibilityTimeout: 90
+  #     # Enable encryption at rest
+  #     SqsManagedSseEnabled: true
+  #     # Dead letter queue configuration
+  #     RedrivePolicy:
+  #       deadLetterTargetArn: !GetAtt ProcessingQueueDLQ.Arn
+  #       maxReceiveCount: 3
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Purpose
+  #         Value: Async Processing Queue
+  #
+  # # Dead Letter Queue for failed messages
+  # ProcessingQueueDLQ:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     QueueName: !Sub "${AWS::StackName}-processing-dlq-${Environment}"
+  #     MessageRetentionPeriod: 1209600  # 14 days
+  #     SqsManagedSseEnabled: true
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Purpose
+  #         Value: Dead Letter Queue
+  #
+  # # Lambda Event Source Mapping for SQS (uncomment to use)
+  # # ProcessingQueueEventSource:
+  # #   Type: AWS::Lambda::EventSourceMapping
+  # #   Properties:
+  # #     EventSourceArn: !GetAtt ProcessingQueue.Arn
+  # #     FunctionName: !Ref HelloWorldFunction
+  # #     BatchSize: 10
+  # #     MaximumBatchingWindowInSeconds: 5
+
+  # ============================================================================
+  # CloudWatch Alarms
+  # ============================================================================
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-errors"
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300 # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HelloWorldFunction
+      # Uncomment to send alerts to SNS/Email:
+      # AlarmActions:
+      #   - !Ref AlertTopic
+
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-throttles"
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300 # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HelloWorldFunction
+      # Uncomment to send alerts to SNS/Email:
+      # AlarmActions:
+      #   - !Ref AlertTopic
+
+  # Uncomment to create SNS topic for alarm notifications:
+  # AlertTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     TopicName: !Sub "${AWS::StackName}-alerts"
+  #     Subscription:
+  #       - Endpoint: your-email@example.com
+  #         Protocol: email
+
+  # ============================================================================
+  # Application Insights
+  # ============================================================================
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -70,11 +276,65 @@ Resources:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: "true"
 Outputs:
+  # ============================================================================
+  # API Outputs
+  # ============================================================================
   HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod environment for Hello World
-      Function
+    Description: API Gateway endpoint URL for Prod environment for Hello World Function
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/hello"
 
+  UsersApi:
+    Description: API Gateway endpoint URL for Users endpoint
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/users"
+
+  # ============================================================================
+  # Lambda Outputs
+  # ============================================================================
   HelloWorldFunction:
     Description: Hello World Lambda Function ARN
     Value: !GetAtt HelloWorldFunction.Arn
+
+  # HelloWorldFunctionRole:
+  #   Description: IAM Role used by Lambda function
+  #   Value: !Ref LambdaExecutionRoleArn  # Only works if Role is specified
+
+  # ============================================================================
+  # CloudWatch Alarms Outputs
+  # ============================================================================
+  LambdaErrorsAlarm:
+    Description: CloudWatch Alarm for Lambda errors
+    Value: !GetAtt LambdaErrorsAlarm.Arn
+
+  LambdaThrottlesAlarm:
+    Description: CloudWatch Alarm for Lambda throttles
+    Value: !GetAtt LambdaThrottlesAlarm.Arn
+
+  # ============================================================================
+  # S3 Outputs (Commented Examples)
+  # ============================================================================
+  # DataBucketName:
+  #   Description: Name of the S3 bucket for data storage
+  #   Value: !Ref DataBucket
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-DataBucket"
+  #
+  # DataBucketArn:
+  #   Description: ARN of the S3 bucket
+  #   Value: !GetAtt DataBucket.Arn
+
+  # ============================================================================
+  # SQS Outputs (Commented Examples)
+  # ============================================================================
+  # ProcessingQueueUrl:
+  #   Description: URL of the processing queue
+  #   Value: !Ref ProcessingQueue
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-ProcessingQueue"
+  #
+  # ProcessingQueueArn:
+  #   Description: ARN of the processing queue
+  #   Value: !GetAtt ProcessingQueue.Arn
+  #
+  # ProcessingQueueDLQUrl:
+  #   Description: URL of the processing dead letter queue
+  #   Value: !Ref ProcessingQueueDLQ
