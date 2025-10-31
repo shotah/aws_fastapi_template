@@ -142,11 +142,16 @@ pip3 install pipenv
    make install-dev
    ```
    This will:
-   - Create a virtual environment
-   - Install all Python dependencies
-   - Set up pre-commit hooks
+   - Create a virtual environment using Pipenv
+   - Install all Python dependencies (including dev tools)
 
-3. **Configure AWS credentials:**
+3. **Install pre-commit hooks:**
+   ```bash
+   make hooks
+   ```
+   This installs git hooks that automatically run linters before each commit.
+
+4. **Configure AWS credentials:**
    ```bash
    aws configure
    ```
@@ -156,7 +161,7 @@ pip3 install pipenv
    - Default region (e.g., `us-east-1`)
    - Default output format (use `json`)
 
-4. **Verify your setup:**
+5. **Verify your setup:**
    ```bash
    make aws-check   # Check AWS credentials
    make test        # Run tests
@@ -372,8 +377,28 @@ This will:
 - Start a local API Gateway on `http://127.0.0.1:3000`
 - Hot-reload your code changes (after rebuild)
 
-**Endpoints:**
-- `GET http://127.0.0.1:3000/hello` - Hello World endpoint
+**Available Endpoints:**
+- `GET http://127.0.0.1:3000/health` - Health check endpoint
+- `GET http://127.0.0.1:3000/hello` - Hello World example (uses helper module)
+- `POST http://127.0.0.1:3000/users` - Create user (demonstrates Pydantic validation)
+- `GET http://127.0.0.1:3000/users/{id}` - Get user by ID (demonstrates error handling)
+
+**Test with curl:**
+```bash
+# Health check
+curl http://127.0.0.1:3000/health
+
+# Hello endpoint
+curl http://127.0.0.1:3000/hello
+
+# Create user
+curl -X POST http://127.0.0.1:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John Doe", "email": "john@example.com", "age": 30}'
+
+# Get user
+curl http://127.0.0.1:3000/users/1000
+```
 
 To stop the server, press `Ctrl+C`.
 
@@ -385,7 +410,7 @@ To stop the server, press `Ctrl+C`.
 make test
 ```
 
-This runs pytest with coverage reporting. Minimum coverage threshold is 80%.
+This runs pytest with coverage reporting. Minimum coverage threshold is 75%.
 
 ### Run Only Failed Tests
 
@@ -457,18 +482,20 @@ You can also view resources in the AWS Console:
 
 ## Code Quality Tools
 
-This project uses several tools to maintain code quality:
+This project uses several tools to maintain code quality via **pre-commit hooks**:
 
-### Linters
+### Linters & Formatters
 
-- **Black** - Code formatter (88 character line length)
+- **black** - Opinionated code formatter (88 character line length)
 - **isort** - Import statement organizer
-- **Flake8** - Style guide enforcement with complexity checks
+- **flake8** - Style guide enforcement with complexity checks
 - **autopep8** - PEP 8 auto-formatter
+- **pyupgrade** - Automatic Python syntax modernization (3.9+)
+- **Pre-commit hooks** - YAML/JSON/TOML validation, trailing whitespace, end-of-file-fixer, etc.
 
 Run all linters:
 ```bash
-make lint
+make lint  # Runs pre-commit on all files
 ```
 
 ### Pre-commit Hooks
@@ -490,24 +517,37 @@ git commit --no-verify
 
 ```
 aws_fastapi_template/
-├── src/                    # Lambda function source code
+├── src/                      # Lambda function source code
 │   ├── __init__.py
-│   ├── app.py             # Main Lambda handler
-│   └── requirements.txt   # Runtime dependencies
-├── tests/                 # Test files
+│   ├── app.py               # Routes only (clean!)
+│   ├── decorators.py        # @unified_response decorator
+│   ├── exceptions.py        # Custom exceptions + handler registration
+│   ├── models.py            # Pydantic request/response models
+│   ├── helper.py            # Business logic & domain models
+│   └── requirements.txt     # Runtime dependencies
+├── tests/                   # Test files
 │   ├── __init__.py
-│   └── test_handler.py    # Handler tests
-├── events/                # Sample event payloads
-│   └── hello.json         # API Gateway event
-├── .vscode/               # VS Code settings
-│   └── settings.json      # Black formatter config
-├── .pre-commit-config.yaml # Pre-commit hooks config
-├── Pipfile                # Development dependencies
-├── pyproject.toml         # Tool configurations
-├── template.yaml          # SAM/CloudFormation template
-├── samconfig.toml         # SAM deployment config
-├── makefile               # Build automation
-└── DEVELOPMENT.md         # This file
+│   ├── conftest.py          # Shared pytest fixtures
+│   ├── test_handler.py      # Handler tests
+│   └── fixtures/            # JSON event fixtures
+│       └── apigw_hello_event.json
+├── events/                  # Sample event payloads for local testing
+│   └── hello.json           # API Gateway event
+├── terraform/               # Infrastructure as Code (alternative to SAM)
+│   ├── main.tf              # Note: This is an alternative IaC option
+│   ├── lambda.tf            # You can use either SAM (template.yaml) OR Terraform
+│   ├── api_gateway.tf       # Both are provided for flexibility
+│   └── ... (other Terraform files)
+├── .pre-commit-config.yaml  # Pre-commit hooks config
+├── Pipfile                  # Development dependencies
+├── Pipfile.lock             # Locked dependency versions
+├── pyproject.toml           # Tool configurations (pytest, coverage)
+├── template.yaml            # SAM/CloudFormation template
+├── samconfig.toml           # SAM deployment config
+├── makefile                 # Build automation
+├── env.json.example         # Local environment variables template
+├── README.md                # Project overview & quick start
+└── DEVELOPMENT.md           # This file (detailed setup guide)
 ```
 
 ## Troubleshooting
