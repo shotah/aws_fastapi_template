@@ -38,9 +38,17 @@ help: ## Show this help message
 	@echo "  make invoke          Invoke Lambda function locally"
 	@echo ""
 	@echo "AWS Deployment:"
-	@echo "  make aws-check       Check AWS credentials configuration"
-	@echo "  make deploy          Deploy to AWS (interactive)"
-	@echo "  make deploy-ci       Deploy to AWS (non-interactive, for CI/CD)"
+	@echo "  make aws-check        Check AWS credentials configuration"
+	@echo "  make deploy           Deploy to AWS (interactive)"
+	@echo "  make deploy-ci        Deploy to AWS (non-interactive, for CI/CD)"
+	@echo "  make deploy-sandbox   Deploy to sandbox environment"
+	@echo "  make deploy-dev       Deploy to dev environment"
+	@echo "  make deploy-prod      Deploy to prod environment (requires confirmation)"
+	@echo ""
+	@echo "AWS Teardown:"
+	@echo "  make destroy-sandbox  Destroy sandbox environment stack"
+	@echo "  make destroy-dev      Destroy dev environment stack"
+	@echo "  make destroy-prod     Destroy prod environment stack (requires confirmation)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Clean build artifacts and virtual env"
@@ -155,3 +163,48 @@ deploy: build aws-check ## Deploy to AWS (requires AWS credentials)
 PHONY: deploy-ci
 deploy-ci: build ## Deploy to AWS without prompts (for CI/CD)
 	sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+
+# ============================================================================
+# Environment-Specific Deployments
+# ============================================================================
+
+PHONY: deploy-sandbox
+deploy-sandbox: build aws-check ## Deploy to sandbox environment (auto-confirm)
+	@echo "Deploying to SANDBOX environment..."
+	sam deploy --config-env sandbox --no-confirm-changeset
+
+PHONY: deploy-dev
+deploy-dev: build aws-check ## Deploy to dev environment (auto-confirm)
+	@echo "Deploying to DEV environment..."
+	sam deploy --config-env dev --no-confirm-changeset
+
+PHONY: deploy-prod
+deploy-prod: build aws-check ## Deploy to prod environment (requires confirmation!)
+	@echo "Deploying to PRODUCTION environment..."
+	@echo "⚠️  WARNING: This will deploy to PRODUCTION! ⚠️"
+	sam deploy --config-env prod
+
+# ============================================================================
+# Environment Teardown (Destroy Stacks)
+# ============================================================================
+
+PHONY: destroy-sandbox
+destroy-sandbox: aws-check ## Destroy sandbox environment stack (auto-confirm)
+	@echo "Destroying SANDBOX environment stack..."
+	sam delete --stack-name aws-fastapi-template-sandbox --no-prompts
+
+PHONY: destroy-dev
+destroy-dev: aws-check ## Destroy dev environment stack (auto-confirm)
+	@echo "Destroying DEV environment stack..."
+	sam delete --stack-name aws-fastapi-template-dev --no-prompts
+
+PHONY: destroy-prod
+destroy-prod: aws-check ## Destroy prod environment stack (DANGEROUS - requires confirmation!)
+	@echo "⚠️⚠️⚠️  WARNING: DESTROYING PRODUCTION STACK! ⚠️⚠️⚠️"
+	@echo "This will delete all production resources including:"
+	@echo "  - Lambda functions"
+	@echo "  - API Gateway"
+	@echo "  - CloudWatch alarms"
+	@echo "  - All associated resources"
+	@echo ""
+	sam delete --stack-name aws-fastapi-template-prod

@@ -51,7 +51,142 @@ Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/devel
         LOG_LEVEL: !Ref LogLevel
   Api:
     TracingEnabled: true
+    # ============================================================================
+    # API Gateway Authorization
+    # ============================================================================
+    # Choose one of the following auth strategies for your API:
+    #
+    # Option 1: AWS IAM Authorization (RECOMMENDED for Enterprise)
+    # ----------------------------------------------------------
+    # Requires AWS SigV4 signed requests using IAM credentials.
+    # Best for:
+    #   - Service-to-service communication
+    #   - Pre-existing IAM roles/policies
+    #   - AWS SDK clients (boto3, AWS CLI, etc.)
+    #
+    # To enable: Add to each endpoint's Events section:
+    #   Auth:
+    #     Authorizer: AWS_IAM
+    #
+    # Clients must sign requests with AWS credentials:
+    #   aws-api-gateway-client --profile your-profile https://api.execute-api.region.amazonaws.com/Prod/hello
+    #
+    # Python example with requests-aws4auth:
+    #   from requests_aws4auth import AWS4Auth
+    #   auth = AWS4Auth(access_key, secret_key, region, 'execute-api')
+    #   requests.get(url, auth=auth)
+    #
+    # ----------------------------------------------------------
+    # Option 2: Lambda Authorizer (Custom JWT/OAuth validation)
+    # ----------------------------------------------------------
+    # Auth:
+    #   Authorizers:
+    #     LambdaTokenAuthorizer:
+    #       FunctionArn: !GetAtt ApiAuthorizerFunction.Arn
+    #       FunctionPayloadType: TOKEN
+    #       Identity:
+    #         Header: Authorization
+    #         ValidationExpression: "^Bearer [-0-9a-zA-Z._]*$"
+    #         ReauthorizeEvery: 300  # Cache for 5 minutes
+    #
+    # Then in endpoints: Auth: { Authorizer: LambdaTokenAuthorizer }
+    #
+    # ----------------------------------------------------------
+    # Option 3: API Keys (Simple rate limiting)
+    # ----------------------------------------------------------
+    # Auth:
+    #   ApiKeyRequired: true
+    #   UsagePlan:
+    #     CreateUsagePlan: SHARED
+    #     Quota:
+    #       Limit: 5000
+    #       Period: MONTH
+    #     Throttle:
+    #       BurstLimit: 200
+    #       RateLimit: 100
+    #
+    # ----------------------------------------------------------
+    # Option 4: Cognito User Pools (AWS managed user authentication)
+    # ----------------------------------------------------------
+    # Auth:
+    #   Authorizers:
+    #     MyCognitoAuth:
+    #       UserPoolArn: !GetAtt UserPool.Arn
+    #
+    # Then in endpoints: Auth: { Authorizer: MyCognitoAuth }
 Resources:
+  # ============================================================================
+  # IAM Policy Example (For AWS_IAM Authorization)
+  # ============================================================================
+  # If using AWS_IAM authorization, clients need an IAM policy like this:
+  #
+  # {
+  #   "Version": "2012-10-17",
+  #   "Statement": [
+  #     {
+  #       "Effect": "Allow",
+  #       "Action": "execute-api:Invoke",
+  #       "Resource": "arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/STAGE/METHOD/PATH"
+  #     }
+  #   ]
+  # }
+  #
+  # Specific examples:
+  #   - All methods/paths: "arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/*"
+  #   - Specific endpoint:  "arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/GET/hello"
+  #   - Users endpoints:    "arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/users/*"
+  #
+  # Attach this policy to:
+  #   - IAM User/Role that will call the API
+  #   - Service (Lambda, ECS, EC2) that needs to invoke the API
+  #
+  # After deployment, get your API ID from outputs or AWS Console:
+  #   aws cloudformation describe-stacks --stack-name aws-fastapi-template-prod \
+  #     --query 'Stacks[0].Outputs[?OutputKey==`HelloWorldApi`].OutputValue' --output text
+
+  # ============================================================================
+  # Lambda Authorizer (Commented Example - Option 2)
+  # ============================================================================
+  # Uncomment to add Lambda authorizer for JWT/custom auth:
+  # ApiAuthorizerFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: ./authorizer  # Create this directory with authorizer code
+  #     Handler: authorizer.lambda_handler
+  #     Runtime: python3.13
+  #     Description: Lambda authorizer for API Gateway
+  #     Environment:
+  #       Variables:
+  #         JWT_SECRET: !Ref JwtSecret  # Add JwtSecret to Parameters
+  #         # Or use Secrets Manager:
+  #         # JWT_SECRET_ARN: !Ref JwtSecretArn
+  #
+  # Example authorizer code (authorizer/authorizer.py):
+  # ```python
+  # import json
+  # import os
+  # import jwt  # PyJWT library
+  #
+  # def lambda_handler(event, context):
+  #     token = event['authorizationToken'].replace('Bearer ', '')
+  #     try:
+  #         decoded = jwt.decode(token, os.getenv('JWT_SECRET'), algorithms=['HS256'])
+  #         return {
+  #             'principalId': decoded['sub'],
+  #             'policyDocument': {
+  #                 'Version': '2012-10-17',
+  #                 'Statement': [{
+  #                     'Action': 'execute-api:Invoke',
+  #                     'Effect': 'Allow',
+  #                     'Resource': event['methodArn']
+  #                 }]
+  #             },
+  #             'context': {'user_id': decoded['sub'], 'email': decoded.get('email')}
+  #         }
+  #     except:
+  #         raise Exception('Unauthorized')
+  # ```
+
   # ============================================================================
   # Lambda Function
   # ============================================================================
@@ -80,6 +215,20 @@ Resources:
           Properties:
             Path: /hello
             Method: GET
+            # ============================================================
+            # Endpoint Authorization (Uncomment to require authentication)
+            # ============================================================
+            # Option 1: AWS IAM (Recommended for enterprise/service-to-service)
+            # Auth:
+            #   Authorizer: AWS_IAM
+            #
+            # Option 2: Lambda Authorizer (for custom JWT/OAuth)
+            # Auth:
+            #   Authorizer: LambdaTokenAuthorizer
+            #
+            # Option 3: Make endpoint public (if global auth is enabled)
+            # Auth:
+            #   Authorizer: NONE
         GetUser:
           Type: Api # Get user by ID
           Properties:

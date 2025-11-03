@@ -63,6 +63,8 @@ class UserCreateRequest(BaseModel):
     email: str = Field(..., description="User's email address")
     age: int = Field(..., ge=0, le=150, description="User's age")
     is_active: bool = Field(default=True, description="Whether the user is active")
+    is_test: bool = Field(default=True, description="test")
+    is_fake: bool = Field(default=False, description="test")
 
 
 # ============================================================================

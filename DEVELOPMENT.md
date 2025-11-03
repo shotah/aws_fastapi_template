@@ -402,6 +402,123 @@ curl http://127.0.0.1:3000/users/1000
 
 To stop the server, press `Ctrl+C`.
 
+---
+
+## API Gateway Authorization
+
+The template supports multiple authorization strategies. **AWS IAM authorization is recommended for enterprise/service-to-service communication.**
+
+### Option 1: AWS IAM Authorization (Recommended)
+
+Requires AWS SigV4 signed requests using IAM credentials. Best for:
+- Service-to-service communication
+- Pre-existing IAM roles/policies
+- AWS SDK clients (boto3, AWS CLI, etc.)
+
+#### Enable IAM Authorization
+
+In `template.yaml`, uncomment the Auth section for any endpoint:
+
+```yaml
+Events:
+  HelloPath:
+    Type: Api
+    Properties:
+      Path: /hello
+      Method: GET
+      Auth:
+        Authorizer: AWS_IAM  # Add this line
+```
+
+#### Required IAM Policy
+
+Clients need an IAM policy attached to their user/role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "execute-api:Invoke",
+      "Resource": "arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/STAGE/METHOD/PATH"
+    }
+  ]
+}
+```
+
+**Examples:**
+```
+All endpoints:     arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/*
+Specific endpoint: arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/GET/hello
+Users paths:       arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/users/*
+```
+
+#### Calling IAM-Protected APIs
+
+**From Python (boto3/requests):**
+```python
+from requests_aws4auth import AWS4Auth
+import requests
+import boto3
+
+# Get AWS credentials
+session = boto3.Session()
+credentials = session.get_credentials()
+
+# Create AWS SigV4 auth
+auth = AWS4Auth(
+    credentials.access_key,
+    credentials.secret_key,
+    'us-east-1',
+    'execute-api',
+    session_token=credentials.token
+)
+
+# Make request
+response = requests.get(
+    'https://abc123xyz.execute-api.us-east-1.amazonaws.com/Prod/hello',
+    auth=auth
+)
+```
+
+**From AWS CLI:**
+```bash
+aws apigatewayv2 invoke \
+  --api-id abc123xyz \
+  --stage Prod \
+  --path /hello \
+  output.json
+```
+
+**From Another Lambda:**
+```python
+# The Lambda execution role needs execute-api:Invoke permission
+from aws_requests_auth.aws_auth import AWSRequestsAuth
+import requests
+import os
+
+auth = AWSRequestsAuth(
+    aws_access_key=os.environ['AWS_ACCESS_KEY_ID'],
+    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    aws_token=os.environ['AWS_SESSION_TOKEN'],
+    aws_host='abc123xyz.execute-api.us-east-1.amazonaws.com',
+    aws_region='us-east-1',
+    aws_service='execute-api'
+)
+
+response = requests.get('https://...', auth=auth)
+```
+
+### Other Authorization Options
+
+See `template.yaml` (lines 59-116) for detailed examples of:
+- **Option 2:** Lambda Authorizer (Custom JWT/OAuth validation)
+- **Option 3:** API Keys (Simple rate limiting)
+- **Option 4:** Cognito User Pools (AWS managed user auth)
+
+---
+
 ## Testing
 
 ### Run All Tests
@@ -466,6 +583,104 @@ Or for CI/CD (no prompts):
 
 ```bash
 make deploy-ci
+```
+
+### Environment-Specific Deployments
+
+The template supports three pre-configured environments: **sandbox**, **dev**, and **prod**.
+
+Each environment has its own configuration in `samconfig.toml` with different:
+- Stack names (e.g., `aws-fastapi-template-sandbox`, `aws-fastapi-template-dev`)
+- Environment parameters (`Environment=dev`, `LogLevel=INFO`)
+- Confirmation settings (prod requires manual confirmation)
+- Optional AWS profiles and regions
+
+#### Deploy to Sandbox
+
+```bash
+make deploy-sandbox
+# Automatically confirms, uses LogLevel=DEBUG
+```
+
+#### Deploy to Dev
+
+```bash
+make deploy-dev
+# Automatically confirms, uses LogLevel=INFO
+```
+
+#### Deploy to Production
+
+```bash
+make deploy-prod
+# ⚠️ REQUIRES manual confirmation
+# Uses LogLevel=WARNING and production tags
+```
+
+#### Customize Environments
+
+Edit `samconfig.toml` to customize each environment:
+
+```toml
+[dev.deploy.parameters]
+parameter_overrides = [
+  "Environment=dev",
+  "LogLevel=INFO"
+  # Add custom parameters:
+  # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/dev-lambda-role"
+]
+# Specify AWS profile and region:
+# region = "us-east-1"
+# profile = "dev-profile"
+```
+
+#### Manual Deployment (Advanced)
+
+You can also deploy manually with custom config:
+
+```bash
+sam build
+sam deploy --config-env sandbox --parameter-overrides "LogLevel=DEBUG"
+```
+
+### Destroying Environments
+
+When you need to tear down an environment and delete all associated AWS resources:
+
+#### Destroy Sandbox
+
+```bash
+make destroy-sandbox
+# Automatically confirms and deletes all sandbox resources
+```
+
+#### Destroy Dev
+
+```bash
+make destroy-dev
+# Automatically confirms and deletes all dev resources
+```
+
+#### Destroy Production
+
+```bash
+make destroy-prod
+# ⚠️ REQUIRES manual confirmation
+# Shows list of resources to be deleted before proceeding
+```
+
+**What gets deleted:**
+- Lambda function(s)
+- API Gateway REST API
+- CloudWatch Log Groups
+- CloudWatch Alarms
+- IAM roles (if created by SAM)
+- S3 deployment bucket (optionally, with `--s3-bucket` flag)
+
+**Manual deletion:**
+```bash
+# Delete stack and S3 bucket
+sam delete --stack-name aws-fastapi-template-dev --no-prompts --s3-bucket your-bucket-name
 ```
 
 ### View Deployed Resources

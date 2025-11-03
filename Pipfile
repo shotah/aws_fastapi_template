@@ -8,8 +8,10 @@ requests = "*"
 jmespath = "*"
 aws-lambda-powertools = {extras = ["tracer"], version = "*"}
 pydantic = "*"
+python-language-server = "*"
 
 [dev-packages]
+python-language-server = {extras = ["all"], version = "*"}
 pytest = "*"
 pytest-cov = "*"
 pre-commit = "*"

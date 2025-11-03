@@ -92,14 +92,36 @@ make test
 ```
 
 ### **Available Make Commands**
+
+**Development:**
 ```bash
-make build              # Build SAM application in Docker container
-make build-no-container # Build without Docker (faster, less reliable)
-make start              # Start local API Gateway
+make install-dev        # Install all dependencies (including dev)
+make hooks              # Install pre-commit hooks
 make test               # Run pytest with coverage
-make lint               # Run linters (ruff, mypy)
+make lint               # Run all linters (black, isort, flake8)
+make build              # Build SAM application in Docker container
+make start              # Start local API Gateway
+```
+
+**Deployment:**
+```bash
+make deploy-sandbox     # Deploy to sandbox environment (auto-confirm)
+make deploy-dev         # Deploy to dev environment (auto-confirm)
+make deploy-prod        # Deploy to prod environment (requires confirmation)
+make deploy             # Interactive guided deployment
+```
+
+**Teardown:**
+```bash
+make destroy-sandbox    # Destroy sandbox stack (auto-confirm)
+make destroy-dev        # Destroy dev stack (auto-confirm)
+make destroy-prod       # Destroy prod stack (requires confirmation)
+```
+
+**Maintenance:**
+```bash
 make clean              # Clean build artifacts
-make requirements-dev   # Generate requirements-dev.txt
+make clean-cache        # Clean SAM cache and Docker containers
 ```
 
 ---
