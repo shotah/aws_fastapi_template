@@ -208,3 +208,52 @@ destroy-prod: aws-check ## Destroy prod environment stack (DANGEROUS - requires 
 	@echo "  - All associated resources"
 	@echo ""
 	sam delete --stack-name aws-fastapi-template-prod
+
+# ============================================================================
+# API Invocation (For IAM-Authenticated Endpoints)
+# ============================================================================
+# Usage: make invoke-sandbox ENDPOINT=/hello
+#        make invoke-dev ENDPOINT=/users/123
+#        make invoke-prod ENDPOINT=/health METHOD=GET
+
+ENDPOINT ?= /hello
+METHOD ?= GET
+
+PHONY: invoke-sandbox
+invoke-sandbox: aws-check ## Invoke API endpoint in sandbox (requires IAM auth if enabled)
+	@echo "Invoking sandbox API: $(METHOD) $(ENDPOINT)"
+	@API_URL=$$(aws cloudformation describe-stacks \
+		--stack-name aws-fastapi-template-sandbox \
+		--query 'Stacks[0].Outputs[?OutputKey==`HelloWorldApi`].OutputValue' \
+		--output text 2>/dev/null); \
+	if [ -z "$$API_URL" ]; then \
+		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
+	fi; \
+	echo "API URL: $$API_URL$(ENDPOINT)"; \
+	python scripts/call_api.py $$API_URL$(ENDPOINT) $(METHOD)
+
+PHONY: invoke-dev
+invoke-dev: aws-check ## Invoke API endpoint in dev (requires IAM auth if enabled)
+	@echo "Invoking dev API: $(METHOD) $(ENDPOINT)"
+	@API_URL=$$(aws cloudformation describe-stacks \
+		--stack-name aws-fastapi-template-dev \
+		--query 'Stacks[0].Outputs[?OutputKey==`HelloWorldApi`].OutputValue' \
+		--output text 2>/dev/null); \
+	if [ -z "$$API_URL" ]; then \
+		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
+	fi; \
+	echo "API URL: $$API_URL$(ENDPOINT)"; \
+	python scripts/call_api.py $$API_URL$(ENDPOINT) $(METHOD)
+
+PHONY: invoke-prod
+invoke-prod: aws-check ## Invoke API endpoint in prod (requires IAM auth if enabled)
+	@echo "Invoking prod API: $(METHOD) $(ENDPOINT)"
+	@API_URL=$$(aws cloudformation describe-stacks \
+		--stack-name aws-fastapi-template-prod \
+		--query 'Stacks[0].Outputs[?OutputKey==`HelloWorldApi`].OutputValue' \
+		--output text 2>/dev/null); \
+	if [ -z "$$API_URL" ]; then \
+		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
+	fi; \
+	echo "API URL: $$API_URL$(ENDPOINT)"; \
+	python scripts/call_api.py $$API_URL$(ENDPOINT) $(METHOD)

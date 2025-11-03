@@ -24,6 +24,7 @@ flake8-annotations-complexity = "*"
 flake8-expression-complexity = "*"
 flake8-cognitive-complexity = "*"
 flake8-adjustable-complexity = "*"
+requests-aws4auth = "*"
 
 [requires]
 python_version = "3.13.8"

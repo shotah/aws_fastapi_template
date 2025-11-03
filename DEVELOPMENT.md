@@ -456,7 +456,33 @@ Users paths:       arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/u
 
 #### Calling IAM-Protected APIs
 
-**From Python (boto3/requests):**
+**Using the included helper script (Recommended):**
+```bash
+# Install the required package first
+pipenv install
+
+# Call API using Makefile (automatically fetches API URL)
+make invoke-dev                          # Calls /hello on dev
+make invoke-dev ENDPOINT=/health         # Calls /health on dev
+make invoke-dev ENDPOINT=/users/123      # Calls /users/123 on dev
+
+# Or call directly with Python script (GET is default)
+python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/hello
+python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users/123
+
+# POST with JSON body (use --method and --data flags)
+python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users \
+  --method POST --data '{"name":"John","email":"john@example.com"}'
+
+# Short flags work too
+python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users \
+  -m POST -d '{"name":"John","email":"john@example.com"}'
+
+# Get full help
+python scripts/call_api.py --help
+```
+
+**From your own Python code:**
 ```python
 from requests_aws4auth import AWS4Auth
 import requests
@@ -476,10 +502,8 @@ auth = AWS4Auth(
 )
 
 # Make request
-response = requests.get(
-    'https://abc123xyz.execute-api.us-east-1.amazonaws.com/Prod/hello',
-    auth=auth
-)
+api_url = 'https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/hello'
+response = requests.get(api_url, auth=auth)
 ```
 
 **From AWS CLI:**
@@ -740,6 +764,9 @@ aws_fastapi_template/
 │   ├── models.py            # Pydantic request/response models
 │   ├── helper.py            # Business logic & domain models
 │   └── requirements.txt     # Runtime dependencies
+├── scripts/                 # Helper scripts
+│   ├── call_api.py          # IAM-authenticated API client
+│   └── README.md            # Scripts documentation
 ├── tests/                   # Test files
 │   ├── __init__.py
 │   ├── conftest.py          # Shared pytest fixtures
@@ -758,8 +785,8 @@ aws_fastapi_template/
 ├── Pipfile.lock             # Locked dependency versions
 ├── pyproject.toml           # Tool configurations (pytest, coverage)
 ├── template.yaml            # SAM/CloudFormation template
-├── samconfig.toml           # SAM deployment config
-├── makefile                 # Build automation
+├── samconfig.toml           # SAM deployment config (multi-environment)
+├── makefile                 # Build automation (deploy, test, invoke, etc.)
 ├── env.json.example         # Local environment variables template
 ├── README.md                # Project overview & quick start
 └── DEVELOPMENT.md           # This file (detailed setup guide)

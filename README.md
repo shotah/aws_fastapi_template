@@ -111,6 +111,15 @@ make deploy-prod        # Deploy to prod environment (requires confirmation)
 make deploy             # Interactive guided deployment
 ```
 
+**Invoke Deployed APIs (IAM-authenticated):**
+```bash
+make invoke-dev                          # Call /hello endpoint on dev
+make invoke-dev ENDPOINT=/health         # Call specific endpoint
+make invoke-dev ENDPOINT=/users/123      # Call with path parameters
+make invoke-sandbox ENDPOINT=/hello      # Call sandbox environment
+make invoke-prod ENDPOINT=/users/456     # Call prod environment
+```
+
 **Teardown:**
 ```bash
 make destroy-sandbox    # Destroy sandbox stack (auto-confirm)
@@ -195,6 +204,9 @@ Pre-configured with **pre-commit hooks**:
 │   ├── exceptions.py       # Custom exceptions + handler registration
 │   ├── models.py           # Pydantic request/response models
 │   └── helper.py           # Business logic & domain models
+├── scripts/
+│   ├── call_api.py         # IAM-authenticated API client (AWS SigV4)
+│   └── README.md           # Scripts documentation
 ├── tests/
 │   ├── conftest.py         # Shared fixtures
 │   ├── test_handler.py     # Endpoint tests
