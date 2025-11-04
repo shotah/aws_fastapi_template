@@ -68,6 +68,7 @@
     "myapp",
     "mypy",
     "nosetests",
+    "onehundred",
     "pipenv",
     "Pipfile",
     "powertools",

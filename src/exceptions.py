@@ -87,3 +87,11 @@ def register_exception_handlers(app: "APIGatewayRestResolver") -> None:
         return Response(
             status_code=ex.status_code, content_type="application/json", body=response.model_dump()
         )
+
+    # NOTE: Pydantic type validation errors (e.g., string instead of int) are handled by
+    # Powertools internally when enable_validation=True. They return 422 in Powertools' format:
+    # {"statusCode": 422, "detail": [{" loc": ["body", "field"], "msg": "...", "type": "..."}]}
+    #
+    # Our custom business logic validation errors (raised via ValidationError, NotFoundError, etc.)
+    # go through handle_app_exception above and return in our ApiResponse
+    # envelope format.

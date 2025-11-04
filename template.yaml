@@ -14,15 +14,15 @@ Parameters:
     # Example: arn:aws:iam::123456789012:role/my-lambda-execution-role
     Default: ""
 
-  # Global environment variables
+  # Global environment variables (also used as API Gateway stage name)
   Environment:
     Type: String
-    Description: Environment name (dev, staging, prod)
-    Default: dev
+    Description: Environment name (used for tags, env vars, and API Gateway stage)
+    Default: Dev
     AllowedValues:
-      - dev
-      - staging
-      - prod
+      - Sandbox
+      - Dev
+      - Prod
 
   LogLevel:
     Type: String
@@ -49,72 +49,29 @@ Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/devel
       Variables:
         ENVIRONMENT: !Ref Environment
         LOG_LEVEL: !Ref LogLevel
-  Api:
-    TracingEnabled: true
-    # ============================================================================
-    # API Gateway Authorization
-    # ============================================================================
-    # Choose one of the following auth strategies for your API:
-    #
-    # Option 1: AWS IAM Authorization (RECOMMENDED for Enterprise)
-    # ----------------------------------------------------------
-    # Requires AWS SigV4 signed requests using IAM credentials.
-    # Best for:
-    #   - Service-to-service communication
-    #   - Pre-existing IAM roles/policies
-    #   - AWS SDK clients (boto3, AWS CLI, etc.)
-    #
-    # To enable: Add to each endpoint's Events section:
-    #   Auth:
-    #     Authorizer: AWS_IAM
-    #
-    # Clients must sign requests with AWS credentials:
-    #   aws-api-gateway-client --profile your-profile https://api.execute-api.region.amazonaws.com/Prod/hello
-    #
-    # Python example with requests-aws4auth:
-    #   from requests_aws4auth import AWS4Auth
-    #   auth = AWS4Auth(access_key, secret_key, region, 'execute-api')
-    #   requests.get(url, auth=auth)
-    #
-    # ----------------------------------------------------------
-    # Option 2: Lambda Authorizer (Custom JWT/OAuth validation)
-    # ----------------------------------------------------------
-    # Auth:
-    #   Authorizers:
-    #     LambdaTokenAuthorizer:
-    #       FunctionArn: !GetAtt ApiAuthorizerFunction.Arn
-    #       FunctionPayloadType: TOKEN
-    #       Identity:
-    #         Header: Authorization
-    #         ValidationExpression: "^Bearer [-0-9a-zA-Z._]*$"
-    #         ReauthorizeEvery: 300  # Cache for 5 minutes
-    #
-    # Then in endpoints: Auth: { Authorizer: LambdaTokenAuthorizer }
-    #
-    # ----------------------------------------------------------
-    # Option 3: API Keys (Simple rate limiting)
-    # ----------------------------------------------------------
-    # Auth:
-    #   ApiKeyRequired: true
-    #   UsagePlan:
-    #     CreateUsagePlan: SHARED
-    #     Quota:
-    #       Limit: 5000
-    #       Period: MONTH
-    #     Throttle:
-    #       BurstLimit: 200
-    #       RateLimit: 100
-    #
-    # ----------------------------------------------------------
-    # Option 4: Cognito User Pools (AWS managed user authentication)
-    # ----------------------------------------------------------
-    # Auth:
-    #   Authorizers:
-    #     MyCognitoAuth:
-    #       UserPoolArn: !GetAtt UserPool.Arn
-    #
-    # Then in endpoints: Auth: { Authorizer: MyCognitoAuth }
+    # Global tags for all functions
+    Tags:
+      Environment: !Ref Environment
+      CostCenter: engineering
+      ManagedBy: SAM
+
 Resources:
+  # ============================================================================
+  # API Gateway (Explicit Definition)
+  # ============================================================================
+  # We define the API explicitly to control the stage name per environment
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      StageName: !Ref Environment # Use Environment as the stage name
+      TracingEnabled: true
+      Tags:
+        Environment: !Ref Environment
+        CostCenter: engineering
+        ManagedBy: SAM
+      # Inherit auth configuration from Globals.Api if needed
+
   # ============================================================================
   # IAM Policy Example (For AWS_IAM Authorization)
   # ============================================================================
@@ -208,11 +165,13 @@ Resources:
         HealthCheck:
           Type: Api # Health check endpoint for monitoring
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /health
             Method: GET
         HelloPath:
           Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /hello
             Method: GET
             # ============================================================
@@ -232,11 +191,13 @@ Resources:
         GetUser:
           Type: Api # Get user by ID
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /users/{user_id}
             Method: GET
         CreateUser:
           Type: Api # Create new user
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /users
             Method: POST
         NightlySchedule:
@@ -271,7 +232,7 @@ Resources:
           # Then in code: boto3.client('secretsmanager').get_secret_value(SecretId=os.getenv('SECRET_ARN'))
       Tags:
         LambdaPowertools: python
-        Environment: !Ref Environment
+        # Environment, CostCenter, ManagedBy tags inherited from Globals.Function.Tags
 
   # ============================================================================
   # S3 Bucket (Commented Example)
@@ -306,10 +267,10 @@ Resources:
   #             - TransitionInDays: 30
   #               StorageClass: STANDARD_IA
   #     Tags:
-  #       - Key: Environment
-  #         Value: !Ref Environment
-  #       - Key: Purpose
-  #         Value: Application Data Storage
+  #       Environment: !Ref Environment
+  #       CostCenter: engineering
+  #       ManagedBy: SAM
+  #       Purpose: Application Data Storage
 
   # ============================================================================
   # SQS Queue (Commented Example)
@@ -329,10 +290,10 @@ Resources:
   #       deadLetterTargetArn: !GetAtt ProcessingQueueDLQ.Arn
   #       maxReceiveCount: 3
   #     Tags:
-  #       - Key: Environment
-  #         Value: !Ref Environment
-  #       - Key: Purpose
-  #         Value: Async Processing Queue
+  #       Environment: !Ref Environment
+  #       CostCenter: engineering
+  #       ManagedBy: SAM
+  #       Purpose: Async Processing Queue
   #
   # # Dead Letter Queue for failed messages
   # ProcessingQueueDLQ:
@@ -342,10 +303,10 @@ Resources:
   #     MessageRetentionPeriod: 1209600  # 14 days
   #     SqsManagedSseEnabled: true
   #     Tags:
-  #       - Key: Environment
-  #         Value: !Ref Environment
-  #       - Key: Purpose
-  #         Value: Dead Letter Queue
+  #       Environment: !Ref Environment
+  #       CostCenter: engineering
+  #       ManagedBy: SAM
+  #       Purpose: Dead Letter Queue
   #
   # # Lambda Event Source Mapping for SQS (uncomment to use)
   # # ProcessingQueueEventSource:
@@ -428,13 +389,11 @@ Outputs:
   # ============================================================================
   # API Outputs
   # ============================================================================
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod environment for Hello World Function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/hello"
-
-  UsersApi:
-    Description: API Gateway endpoint URL for Users endpoint
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/users"
+  ApiBaseUrl:
+    Description: "API Gateway base URL - append endpoint paths (e.g., /hello, /users, /health)"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiBaseUrl"
 
   # ============================================================================
   # Lambda Outputs

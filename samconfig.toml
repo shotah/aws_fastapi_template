@@ -37,7 +37,7 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = false  # No confirmation needed in sandbox
 resolve_s3 = true
 parameter_overrides = [
-  "Environment=dev",
+  "Environment=Sandbox",
   "LogLevel=DEBUG"
 ]
 # Optionally specify region and profile:
@@ -63,7 +63,7 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = false  # Auto-confirm in dev
 resolve_s3 = true
 parameter_overrides = [
-  "Environment=dev",
+  "Environment=Dev",
   "LogLevel=INFO"
 ]
 # Optionally specify region and profile:
@@ -89,7 +89,7 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = true  # ALWAYS confirm in prod!
 resolve_s3 = true
 parameter_overrides = [
-  "Environment=prod",
+  "Environment=Prod",
   "LogLevel=WARNING"
   # Add your production-specific parameters:
   # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/prod-lambda-role"
@@ -97,4 +97,6 @@ parameter_overrides = [
 # Specify production region and profile:
 # region = "us-east-1"
 # profile = "prod"
-tags = "Environment=prod CostCenter=engineering"
+# Note: Tags are primarily defined in template.yaml (Globals.Function.Tags and per-resource)
+# Stack-level tags can be added here if needed
+tags = "Environment=Prod CostCenter=engineering ManagedBy=SAM"

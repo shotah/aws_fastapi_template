@@ -230,3 +230,76 @@ def test_get_user_invalid_id(
     assert error["type"] == "ValidationError"
     assert "Invalid user ID format" in error["message"]
     assert error["details"]["user_id"] == "abc"
+
+
+def test_create_user_type_error(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
+    """Test POST /users with wrong type for age field (string instead of int)
+
+    NOTE: Pydantic type validation errors are handled by Powertools internally
+    and return in Powertools' standard format (not our ApiResponse wrapper).
+    This is by design - Powertools catches type/format errors before our handlers.
+
+    Our custom business logic validation (like age > 150) DOES go through our
+    exception handler and returns in ApiResponse format.
+    """
+    # Modify event for POST /users with invalid type
+    base_apigw_event["httpMethod"] = "POST"
+    base_apigw_event["path"] = "/users"
+    base_apigw_event["resource"] = "/users"
+    base_apigw_event["requestContext"]["httpMethod"] = "POST"
+    base_apigw_event["requestContext"]["path"] = "/users"
+    base_apigw_event["requestContext"]["resourcePath"] = "/users"
+    # Send string "onehundred" instead of integer 100
+    base_apigw_event["body"] = json.dumps(
+        {"name": "Jane Doe", "email": "jane@example.com", "age": "onehundred"}
+    )
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    # Should return 422 (Unprocessable Entity) for Pydantic validation error
+    assert ret["statusCode"] == 422
+
+    # Powertools returns validation errors in its own format (not our ApiResponse wrapper)
+    # Format: {"statusCode": 422, "detail": [{"loc": ["body", "age"], "msg": "...", "type": "..."}]}
+    assert "statusCode" in response or "detail" in response or "message" in response
+
+    # Verify the error mentions the age field
+    response_str = json.dumps(response).lower()
+    assert "age" in response_str
+
+
+def test_create_user_missing_required_field(
+    base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext
+) -> None:
+    """Test POST /users with missing required field (email)
+
+    In Pydantic, fields with Field(...) are REQUIRED (the ... means no default).
+    Optional fields have default values like Field(default=True).
+
+    Missing required fields are caught by Powertools validation (422 error).
+    """
+    # Modify event for POST /users
+    base_apigw_event["httpMethod"] = "POST"
+    base_apigw_event["path"] = "/users"
+    base_apigw_event["resource"] = "/users"
+    base_apigw_event["requestContext"]["httpMethod"] = "POST"
+    base_apigw_event["requestContext"]["path"] = "/users"
+    base_apigw_event["requestContext"]["resourcePath"] = "/users"
+    # Missing required field: email (name, email, age are all required)
+    base_apigw_event["body"] = json.dumps({"name": "Jane Doe", "age": 30})
+
+    ret = lambda_handler(base_apigw_event, lambda_context)
+    response = json.loads(ret["body"])
+
+    # Should return 422 (Unprocessable Entity) for missing required field
+    assert ret["statusCode"] == 422
+
+    # Powertools returns validation errors for missing required fields
+    assert "statusCode" in response or "detail" in response or "message" in response
+
+    # Verify the error mentions the email field
+    response_str = json.dumps(response).lower()
+    assert "email" in response_str
