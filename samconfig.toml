@@ -26,7 +26,7 @@ warm_containers = "EAGER"
 # Usage: sam deploy --config-env sandbox
 # ============================================================================
 [sandbox.global.parameters]
-stack_name = "aws-fastapi-template-sandbox"
+stack_name = "aws-fastapi-template"
 
 [sandbox.build.parameters]
 cached = true
@@ -52,7 +52,7 @@ watch = true
 # Usage: sam deploy --config-env dev
 # ============================================================================
 [dev.global.parameters]
-stack_name = "aws-fastapi-template-dev"
+stack_name = "aws-fastapi-template"
 
 [dev.build.parameters]
 cached = true
@@ -78,7 +78,7 @@ watch = true
 # Usage: sam deploy --config-env prod
 # ============================================================================
 [prod.global.parameters]
-stack_name = "aws-fastapi-template-prod"
+stack_name = "aws-fastapi-template"
 
 [prod.build.parameters]
 cached = true

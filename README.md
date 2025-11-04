@@ -66,6 +66,26 @@ def register_exception_handlers(app):
 
 **Why?** API contracts shouldn't dictate your domain design. Keep them separate, avoid duplication.
 
+#### **6. AWS Service Integration with Mocking**
+- **`services/storage.py`** = Clean S3 abstraction layer
+- **Full mocking with Moto** = Test AWS services without AWS
+- **Reusable test fixtures** = DRY testing patterns
+- **4 file management endpoints** = Upload, download, list, delete
+
+```python
+# Production code - simple and clean
+storage = get_storage_service()
+storage.upload_file(content, key="uploads/file.pdf")
+
+# Tests - fully mocked, no AWS needed
+def test_upload(mock_s3_bucket):
+    storage = get_storage_service()
+    storage.upload_file(b"test", "file.txt")
+    assert storage.file_exists("file.txt")
+```
+
+**Why?** AWS integrations done right: type-safe, testable, fast, with zero AWS costs in CI/CD.
+
 ---
 
 ## 🚀 Quick Start

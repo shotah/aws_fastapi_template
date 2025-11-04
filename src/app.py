@@ -11,7 +11,15 @@ from decorators import unified_response  # type: ignore
 from exceptions import NotFoundError, ValidationError, register_exception_handlers  # type: ignore
 from helper import Users, get_greeting_message, multiply_numbers  # type: ignore
 from models import UserCreateRequest  # type: ignore
-from models import HelloResponse, UserCreateResponse, UserResponse
+from models import (
+    FileListResponse,
+    FileUploadRequest,
+    FileUploadResponse,
+    HelloResponse,
+    UserCreateResponse,
+    UserResponse,
+)
+from services.storage import get_storage_service  # type: ignore
 
 app = APIGatewayRestResolver(enable_validation=True)
 tracer = Tracer()
@@ -171,6 +179,185 @@ def hello() -> dict[str, Any]:
         helper_module_test=greeting_model,  # Already a Pydantic model!
         multiplication_result=test_multiply,
     ).model_dump()
+
+
+# ============================================================================
+# Storage Endpoints (S3 Integration Example)
+# ============================================================================
+
+
+@app.post("/files")
+@unified_response
+@tracer.capture_method
+def upload_file(upload_request: FileUploadRequest) -> dict[str, Any]:
+    """
+    Upload a file to S3.
+
+    Demonstrates:
+    - S3 integration via StorageService
+    - Base64 decoding
+    - File size calculation
+    - Error handling for storage operations
+
+    Request body:
+        {
+            "file_name": "document.pdf",
+            "content": "base64_encoded_content",
+            "content_type": "application/pdf",
+            "metadata": {"author": "John Doe"}
+        }
+
+    Returns:
+        File upload response with S3 key and size
+    """
+    import base64
+
+    metrics.add_metric(name="FileUploads", unit=MetricUnit.Count, value=1)
+
+    try:
+        # Decode base64 content
+        file_content = base64.b64decode(upload_request.content)
+
+        # Generate S3 key (you might want to use UUID or timestamp)
+        import uuid
+
+        file_id = f"uploads/{uuid.uuid4()}/{upload_request.file_name}"
+
+        # Upload to S3
+        storage = get_storage_service()
+        storage.upload_file(
+            file_content=file_content,
+            key=file_id,
+            content_type=upload_request.content_type,
+            metadata=upload_request.metadata or {},
+        )
+
+        logger.info(f"File uploaded successfully: {file_id}", extra={"size": len(file_content)})
+
+        return FileUploadResponse(
+            file_id=file_id,
+            file_name=upload_request.file_name,
+            size=len(file_content),
+            message="File uploaded successfully",
+        ).model_dump()
+
+    except Exception as e:
+        logger.error(f"Failed to upload file: {e}")
+        metrics.add_metric(name="FileUploadErrors", unit=MetricUnit.Count, value=1)
+        raise ValidationError(f"Failed to upload file: {str(e)}")
+
+
+@app.get("/files/<file_id>")
+@unified_response
+@tracer.capture_method
+def download_file(file_id: str) -> dict[str, Any]:
+    """
+    Download a file from S3.
+
+    Path parameter:
+        file_id: S3 key (e.g., "uploads/uuid/filename.pdf")
+
+    Returns:
+        File content as base64-encoded string with metadata
+    """
+    import base64
+
+    metrics.add_metric(name="FileDownloads", unit=MetricUnit.Count, value=1)
+
+    try:
+        storage = get_storage_service()
+
+        # Check if file exists
+        if not storage.file_exists(file_id):
+            raise NotFoundError(f"File not found: {file_id}")
+
+        # Download file
+        file_content = storage.download_file(file_id)
+
+        logger.info(f"File downloaded successfully: {file_id}", extra={"size": len(file_content)})
+
+        return {
+            "file_id": file_id,
+            "content": base64.b64encode(file_content).decode("utf-8"),
+            "size": len(file_content),
+            "message": "File downloaded successfully",
+        }
+
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download file: {e}")
+        metrics.add_metric(name="FileDownloadErrors", unit=MetricUnit.Count, value=1)
+        raise ValidationError(f"Failed to download file: {str(e)}")
+
+
+@app.get("/files")
+@unified_response
+@tracer.capture_method
+def list_files() -> dict[str, Any]:
+    """
+    List all files in S3 bucket.
+
+    Query parameters:
+        prefix (optional): Filter files by prefix (e.g., "uploads/")
+
+    Returns:
+        List of files with metadata (key, size, last_modified)
+    """
+    metrics.add_metric(name="FileListRequests", unit=MetricUnit.Count, value=1)
+
+    try:
+        # Get optional prefix from query parameters
+        prefix = app.current_event.get_query_string_value("prefix", default_value="")
+
+        storage = get_storage_service()
+        files = storage.list_files(prefix=prefix)
+
+        logger.info(f"Listed {len(files)} files", extra={"prefix": prefix})
+
+        return FileListResponse(files=files, count=len(files)).model_dump()
+
+    except Exception as e:
+        logger.error(f"Failed to list files: {e}")
+        metrics.add_metric(name="FileListErrors", unit=MetricUnit.Count, value=1)
+        raise ValidationError(f"Failed to list files: {str(e)}")
+
+
+@app.delete("/files/<file_id>")
+@unified_response
+@tracer.capture_method
+def delete_file(file_id: str) -> dict[str, Any]:
+    """
+    Delete a file from S3.
+
+    Path parameter:
+        file_id: S3 key (e.g., "uploads/uuid/filename.pdf")
+
+    Returns:
+        Success message
+    """
+    metrics.add_metric(name="FileDeletions", unit=MetricUnit.Count, value=1)
+
+    try:
+        storage = get_storage_service()
+
+        # Check if file exists
+        if not storage.file_exists(file_id):
+            raise NotFoundError(f"File not found: {file_id}")
+
+        # Delete file
+        storage.delete_file(file_id)
+
+        logger.info(f"File deleted successfully: {file_id}")
+
+        return {"file_id": file_id, "message": "File deleted successfully"}
+
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete file: {e}")
+        metrics.add_metric(name="FileDeletionErrors", unit=MetricUnit.Count, value=1)
+        raise ValidationError(f"Failed to delete file: {str(e)}")
 
 
 def handle_scheduled_event(event: dict) -> dict[str, Any]:

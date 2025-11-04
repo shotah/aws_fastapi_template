@@ -38,7 +38,6 @@ help: ## Show this help message
 	@echo "  make invoke          Invoke Lambda function locally"
 	@echo ""
 	@echo "AWS Deployment:"
-	@echo "  make aws-check        Check AWS credentials configuration"
 	@echo "  make deploy           Deploy to AWS (interactive)"
 	@echo "  make deploy-ci        Deploy to AWS (non-interactive, for CI/CD)"
 	@echo "  make deploy-sandbox   Deploy to sandbox environment"
@@ -64,23 +63,6 @@ help: ## Show this help message
 
 PHONY: all
 all: hooks install-dev lint test ## Run full setup: hooks, install, lint, and test
-
-PHONY: aws-check
-aws-check: ## Check AWS credentials configuration
-	@echo "Checking AWS credentials..."
-	@aws sts get-caller-identity > /dev/null 2>&1 && \
-		echo "✓ AWS credentials configured" && \
-		aws sts get-caller-identity || \
-		(echo "✗ AWS credentials not configured" && \
-		 echo "" && \
-		 echo "To configure AWS credentials, run:" && \
-		 echo "  aws configure" && \
-		 echo "" && \
-		 echo "Or set environment variables:" && \
-		 echo "  export AWS_ACCESS_KEY_ID=your_access_key" && \
-		 echo "  export AWS_SECRET_ACCESS_KEY=your_secret_key" && \
-		 echo "  export AWS_DEFAULT_REGION=us-east-1" && \
-		 exit 1)
 
 PHONY: clean
 clean: ## Clean build artifacts and remove virtual environment
@@ -157,7 +139,7 @@ invoke: build ## Invoke Lambda function locally with test event (Broken in Make,
 	sam local invoke --event events/hello.json HelloWorldFunction
 
 PHONY: deploy
-deploy: build aws-check ## Deploy to AWS (requires AWS credentials)
+deploy: build  ## Deploy to AWS (requires AWS credentials)
 	sam deploy --guided
 
 PHONY: deploy-ci
@@ -169,17 +151,17 @@ deploy-ci: build ## Deploy to AWS without prompts (for CI/CD)
 # ============================================================================
 
 PHONY: deploy-sandbox
-deploy-sandbox: build aws-check ## Deploy to sandbox environment (auto-confirm)
+deploy-sandbox: build  ## Deploy to sandbox environment (auto-confirm)
 	@echo "Deploying to SANDBOX environment..."
 	sam deploy --config-env sandbox --no-confirm-changeset
 
 PHONY: deploy-dev
-deploy-dev: build aws-check ## Deploy to dev environment (auto-confirm)
+deploy-dev: build  ## Deploy to dev environment (auto-confirm)
 	@echo "Deploying to DEV environment..."
 	sam deploy --config-env dev --no-confirm-changeset
 
 PHONY: deploy-prod
-deploy-prod: build aws-check ## Deploy to prod environment (requires confirmation!)
+deploy-prod: build  ## Deploy to prod environment (requires confirmation!)
 	@echo "Deploying to PRODUCTION environment..."
 	@echo "⚠️  WARNING: This will deploy to PRODUCTION! ⚠️"
 	sam deploy --config-env prod
@@ -189,17 +171,17 @@ deploy-prod: build aws-check ## Deploy to prod environment (requires confirmatio
 # ============================================================================
 
 PHONY: destroy-sandbox
-destroy-sandbox: aws-check ## Destroy sandbox environment stack (auto-confirm)
+destroy-sandbox:  ## Destroy sandbox environment stack (auto-confirm)
 	@echo "Destroying SANDBOX environment stack..."
 	sam delete --stack-name aws-fastapi-template-sandbox --no-prompts
 
 PHONY: destroy-dev
-destroy-dev: aws-check ## Destroy dev environment stack (auto-confirm)
+destroy-dev:  ## Destroy dev environment stack (auto-confirm)
 	@echo "Destroying DEV environment stack..."
 	sam delete --stack-name aws-fastapi-template-dev --no-prompts
 
 PHONY: destroy-prod
-destroy-prod: aws-check ## Destroy prod environment stack (DANGEROUS - requires confirmation!)
+destroy-prod:  ## Destroy prod environment stack (DANGEROUS - requires confirmation!)
 	@echo "⚠️⚠️⚠️  WARNING: DESTROYING PRODUCTION STACK! ⚠️⚠️⚠️"
 	@echo "This will delete all production resources including:"
 	@echo "  - Lambda functions"
@@ -208,52 +190,3 @@ destroy-prod: aws-check ## Destroy prod environment stack (DANGEROUS - requires 
 	@echo "  - All associated resources"
 	@echo ""
 	sam delete --stack-name aws-fastapi-template-prod
-
-# ============================================================================
-# API Invocation (For IAM-Authenticated Endpoints)
-# ============================================================================
-# Usage: make invoke-sandbox ENDPOINT=/hello
-#        make invoke-dev ENDPOINT=/users/123
-#        make invoke-prod ENDPOINT=/health METHOD=GET
-
-ENDPOINT ?= /hello
-METHOD ?= GET
-
-PHONY: invoke-sandbox
-invoke-sandbox: aws-check ## Invoke API endpoint in sandbox (requires IAM auth if enabled)
-	@echo "Invoking sandbox API: $(METHOD) $(ENDPOINT)"
-	@API_BASE=$$(aws cloudformation describe-stacks \
-		--stack-name aws-fastapi-template-sandbox \
-		--query 'Stacks[0].Outputs[?OutputKey==`ApiBaseUrl`].OutputValue' \
-		--output text 2>/dev/null); \
-	if [ -z "$$API_BASE" ]; then \
-		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
-	fi; \
-	echo "API URL: $$API_BASE$(ENDPOINT)"; \
-	python scripts/call_api.py $$API_BASE$(ENDPOINT) $(METHOD)
-
-PHONY: invoke-dev
-invoke-dev: aws-check ## Invoke API endpoint in dev (requires IAM auth if enabled)
-	@echo "Invoking dev API: $(METHOD) $(ENDPOINT)"
-	@API_BASE=$$(aws cloudformation describe-stacks \
-		--stack-name aws-fastapi-template-dev \
-		--query 'Stacks[0].Outputs[?OutputKey==`ApiBaseUrl`].OutputValue' \
-		--output text 2>/dev/null); \
-	if [ -z "$$API_BASE" ]; then \
-		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
-	fi; \
-	echo "API URL: $$API_BASE$(ENDPOINT)"; \
-	python scripts/call_api.py $$API_BASE$(ENDPOINT) $(METHOD)
-
-PHONY: invoke-prod
-invoke-prod: aws-check ## Invoke API endpoint in prod (requires IAM auth if enabled)
-	@echo "Invoking prod API: $(METHOD) $(ENDPOINT)"
-	@API_BASE=$$(aws cloudformation describe-stacks \
-		--stack-name aws-fastapi-template-prod \
-		--query 'Stacks[0].Outputs[?OutputKey==`ApiBaseUrl`].OutputValue' \
-		--output text 2>/dev/null); \
-	if [ -z "$$API_BASE" ]; then \
-		echo "❌ Error: Stack not found or not deployed yet"; exit 1; \
-	fi; \
-	echo "API URL: $$API_BASE$(ENDPOINT)"; \
-	python scripts/call_api.py $$API_BASE$(ENDPOINT) $(METHOD)

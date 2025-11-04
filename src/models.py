@@ -67,6 +67,26 @@ class UserCreateRequest(BaseModel):
     is_fake: bool = Field(default=False, description="test")
 
 
+class FileUploadRequest(BaseModel):
+    """Request model for uploading a file."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "file_name": "document.pdf",
+                "content": "base64_encoded_content_here",
+                "content_type": "application/pdf",
+                "metadata": {"author": "John Doe", "version": "1.0"},
+            }
+        }
+    )
+
+    file_name: str = Field(..., min_length=1, max_length=255, description="Name of the file")
+    content: str = Field(..., description="Base64-encoded file content")
+    content_type: str = Field(default="application/octet-stream", description="MIME type")
+    metadata: dict[str, str] | None = Field(default=None, description="Optional metadata")
+
+
 # ============================================================================
 # Response Models
 # ============================================================================
@@ -116,3 +136,27 @@ class UserCreateResponse(BaseModel):
     status: str
     message: str
     user: User  # Using domain model directly - no duplication!
+
+
+class FileUploadResponse(BaseModel):
+    """Response model for file upload."""
+
+    file_id: str = Field(..., description="S3 key of the uploaded file")
+    file_name: str = Field(..., description="Name of the uploaded file")
+    size: int = Field(..., description="Size in bytes")
+    message: str = Field(..., description="Success message")
+
+
+class FileMetadata(BaseModel):
+    """Metadata for a file in S3."""
+
+    key: str = Field(..., description="S3 object key")
+    size: str = Field(..., description="File size in bytes")
+    last_modified: str = Field(..., description="Last modified timestamp")
+
+
+class FileListResponse(BaseModel):
+    """Response model for listing files."""
+
+    files: list[FileMetadata] = Field(..., description="List of files")
+    count: int = Field(..., description="Number of files")

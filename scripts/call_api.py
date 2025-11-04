@@ -3,34 +3,32 @@
 API Client for IAM-Authenticated AWS API Gateway Endpoints
 
 This script makes signed requests to API Gateway endpoints that require
-AWS IAM authorization. It automatically uses your AWS credentials from
-the environment (AWS CLI profile, IAM role, etc.)
+AWS IAM authorization. It reads configuration from a .env file, making it
+easy to test different endpoints by just editing the .env file.
 
 Usage:
-    python scripts/call_api.py URL [options]
+    1. Copy .env.example to .env
+    2. Edit .env with your API endpoint and request details
+    3. Run: python scripts/call_api.py
 
-Examples:
-    # GET request
-    python scripts/call_api.py https://abc.execute-api.us-east-1.amazonaws.com/Prod/hello  # noqa: E501
+Example .env:
+    API_URL=https://abc.execute-api.us-east-1.amazonaws.com/Dev/hello
+    API_METHOD=GET
+    API_DATA=
 
-    # POST with JSON body
-    python scripts/call_api.py https://abc.execute-api.us-east-1.amazonaws.com/Prod/users --method POST --data '{"name":"John","email":"john@example.com"}'  # noqa: E501
-
-    # PUT request
-    python scripts/call_api.py https://abc.execute-api.us-east-1.amazonaws.com/Prod/users/123 -m PUT -d '{"name":"Jane"}'  # noqa: E501
-
-    # DELETE request
-    python scripts/call_api.py https://abc.execute-api.us-east-1.amazonaws.com/Prod/users/123 --method DELETE  # noqa: E501
+    # For POST requests:
+    # API_URL=https://abc.execute-api.us-east-1.amazonaws.com/Dev/users
+    # API_METHOD=POST
+    # API_DATA={"name":"John","email":"john@example.com","age":30}
 
 Requirements:
-    pip install requests requests-aws4auth boto3
-
-For full help:
-    python scripts/call_api.py --help
+    pip install requests requests-aws4auth boto3 python-dotenv
+    or
+    pipenv install
 """  # noqa: E501
 
-import argparse
 import json
+import os
 import sys
 from typing import Any
 from urllib.parse import urlparse
@@ -38,13 +36,12 @@ from urllib.parse import urlparse
 try:
     import boto3  # type: ignore
     import requests  # type: ignore
+    from dotenv import load_dotenv  # type: ignore
     from requests_aws4auth import AWS4Auth  # type: ignore
 except ImportError as e:
     print(f"❌ Missing required package: {e}")
     print("\nInstall dependencies with:")
-    print("  pip install requests requests-aws4auth boto3")
-    print("  or")
-    print("  pipenv install requests-aws4auth")
+    print("  pipenv install")
     sys.exit(1)
 
 
@@ -91,17 +88,28 @@ def get_aws_auth(api_url: str) -> AWS4Auth:
     )
 
 
-def call_api(url: str, method: str = "GET", data: str | None = None, timeout: int = 30) -> None:
+def call_api() -> None:
     """
-    Call API Gateway endpoint with IAM authentication.
+    Call API Gateway endpoint with IAM authentication using .env configuration.
+    """
+    # Load .env file
+    load_dotenv()
 
-    Args:
-        url: Full API endpoint URL
-        method: HTTP method (GET, POST, PUT, DELETE, etc.)
-        data: JSON string for request body (for POST/PUT)
-        timeout: Request timeout in seconds
-    """
-    method = method.upper()
+    # Read configuration from environment
+    url = os.getenv("API_URL")
+    method = os.getenv("API_METHOD", "GET").upper()
+    data = os.getenv("API_DATA")
+    timeout = int(os.getenv("API_TIMEOUT", "30"))
+
+    # Validate required config
+    if not url:
+        print("❌ Error: API_URL not set in .env file")
+        print("\nCreate a .env file with:")
+        print("  API_URL=https://your-api.execute-api.region.amazonaws.com/" "stage/path")
+        print("  API_METHOD=GET")
+        print("  API_DATA=")
+        print("\nSee .env.example for a full example")
+        sys.exit(1)
 
     print("\n🔐 Making signed " + method + " request to:")
     print("   " + url + "\n")
@@ -179,74 +187,9 @@ def _print_response(response: requests.Response) -> None:
         print(response.text)
 
 
-def _create_argument_parser() -> argparse.ArgumentParser:
-    """
-    Create and configure the argument parser.
-
-    Returns:
-        Configured ArgumentParser instance
-    """
-    parser = argparse.ArgumentParser(
-        description="Call IAM-authenticated AWS API Gateway endpoints",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # GET request
-  %(prog)s https://abc.execute-api.us-east-1.amazonaws.com/Prod/hello
-
-  # GET with path parameters
-  %(prog)s https://abc.execute-api.us-east-1.amazonaws.com/Prod/users/123
-
-  # POST request with JSON body
-  %(prog)s https://abc.execute-api.us-east-1.amazonaws.com/Prod/users \\
-    --method POST --data '{"name":"John","email":"john@example.com"}'
-
-  # Different HTTP methods
-  %(prog)s https://api.../Prod/users/123 --method PUT --data '{"name":"Jane"}'
-  %(prog)s https://api.../Prod/users/123 --method DELETE
-
-Environment:
-  AWS credentials are automatically detected from:
-    - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-    - AWS CLI profile (AWS_PROFILE env var or ~/.aws/credentials)
-    - IAM role (if running on EC2/Lambda/ECS)
-        """,
-    )
-
-    parser.add_argument(
-        "url",
-        help="Full API Gateway endpoint URL (e.g., https://abc.execute-api.us-east-1.amazonaws.com/Prod/hello)",  # noqa: E501
-    )
-
-    parser.add_argument(
-        "-m",
-        "--method",
-        default="GET",
-        choices=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
-        help="HTTP method (default: GET)",
-    )
-
-    parser.add_argument(
-        "-d",
-        "--data",
-        help="JSON data for request body (for POST/PUT/PATCH)",
-    )
-
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=30,
-        help="Request timeout in seconds (default: 30)",
-    )
-
-    return parser
-
-
 def main() -> None:
-    """Parse arguments and call API."""
-    parser = _create_argument_parser()
-    args = parser.parse_args()
-    call_api(args.url, args.method, args.data, args.timeout)
+    """Load .env and call API."""
+    call_api()
 
 
 if __name__ == "__main__":

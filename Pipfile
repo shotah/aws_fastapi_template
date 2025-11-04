@@ -8,10 +8,8 @@ requests = "*"
 jmespath = "*"
 aws-lambda-powertools = {extras = ["tracer"], version = "*"}
 pydantic = "*"
-python-language-server = "*"
 
 [dev-packages]
-python-language-server = {extras = ["all"], version = "*"}
 pytest = "*"
 pytest-cov = "*"
 pre-commit = "*"
@@ -25,6 +23,8 @@ flake8-expression-complexity = "*"
 flake8-cognitive-complexity = "*"
 flake8-adjustable-complexity = "*"
 requests-aws4auth = "*"
+moto = {extras = ["s3"], version = "*"}
+python-dotenv = "*"
 
 [requires]
 python_version = "3.13.8"

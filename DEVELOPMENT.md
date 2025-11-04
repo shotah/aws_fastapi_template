@@ -553,6 +553,98 @@ make test
 
 This runs pytest with coverage reporting. Minimum coverage threshold is 75%.
 
+### Mocking AWS Services (S3, DynamoDB, etc.)
+
+This template uses **[moto](https://github.com/getmoto/moto)** for mocking AWS services in tests. This allows you to test AWS integrations locally without incurring costs or requiring real AWS resources.
+
+#### S3 Mocking Example
+
+The template includes a fully working S3 integration example in `src/services/storage.py` with comprehensive tests in `tests/test_storage.py`.
+
+**Reusable Fixtures (tests/conftest.py):**
+
+```python
+@pytest.fixture(scope="function")
+def aws_credentials() -> None:
+    """Set fake AWS credentials for moto."""
+    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+@pytest.fixture(scope="function")
+def s3_client(aws_credentials):
+    """Create a mocked S3 client."""
+    with mock_aws():
+        yield boto3.client("s3", region_name="us-east-1")
+
+@pytest.fixture(scope="function")
+def mock_s3_bucket(s3_client) -> str:
+    """Create a mock S3 bucket for testing."""
+    bucket_name = "test-bucket"
+    s3_client.create_bucket(Bucket=bucket_name)
+    os.environ["DATA_BUCKET"] = bucket_name
+    return bucket_name
+```
+
+**Using in Tests:**
+
+```python
+from services.storage import get_storage_service
+
+def test_upload_file(mock_s3_bucket, s3_client):
+    """Test uploading a file to S3."""
+    service = get_storage_service()
+
+    # Upload file (mocked - no real S3 access)
+    service.upload_file(
+        file_content=b"Hello, World!",
+        key="test/file.txt",
+        content_type="text/plain"
+    )
+
+    # Verify using mocked S3 client
+    response = s3_client.get_object(Bucket=mock_s3_bucket, Key="test/file.txt")
+    assert response["Body"].read() == b"Hello, World!"
+```
+
+**Key Benefits:**
+- ✅ Fast tests (no network calls)
+- ✅ No AWS costs
+- ✅ Deterministic behavior
+- ✅ Works offline
+- ✅ Automatic cleanup after each test
+
+**Adding More AWS Service Mocks:**
+
+To mock other AWS services (DynamoDB, SQS, SNS, etc.):
+
+1. Add the service to `Pipfile`:
+   ```toml
+   moto = {extras = ["s3", "dynamodb", "sqs"], version = "*"}
+   ```
+
+2. Create fixtures in `conftest.py`:
+   ```python
+   @pytest.fixture
+   def dynamodb_table(aws_credentials):
+       with mock_aws():
+           client = boto3.client("dynamodb", region_name="us-east-1")
+           client.create_table(
+               TableName="test-table",
+               KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+               AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+               BillingMode="PAY_PER_REQUEST"
+           )
+           yield client
+   ```
+
+3. Use in your tests:
+   ```python
+   def test_dynamodb(dynamodb_table):
+       # All DynamoDB operations are mocked
+       dynamodb_table.put_item(TableName="test-table", Item={"id": {"S": "123"}})
+   ```
+
 ### Run Only Failed Tests
 
 ```bash
@@ -763,14 +855,18 @@ aws_fastapi_template/
 │   ├── exceptions.py        # Custom exceptions + handler registration
 │   ├── models.py            # Pydantic request/response models
 │   ├── helper.py            # Business logic & domain models
+│   ├── services/            # AWS service integrations
+│   │   ├── __init__.py
+│   │   └── storage.py       # S3 storage service
 │   └── requirements.txt     # Runtime dependencies
 ├── scripts/                 # Helper scripts
 │   ├── call_api.py          # IAM-authenticated API client
 │   └── README.md            # Scripts documentation
 ├── tests/                   # Test files
 │   ├── __init__.py
-│   ├── conftest.py          # Shared pytest fixtures
-│   ├── test_handler.py      # Handler tests
+│   ├── conftest.py          # Shared pytest fixtures (includes AWS mocking)
+│   ├── test_handler.py      # API handler tests
+│   ├── test_storage.py      # S3 storage service tests (mocked with moto)
 │   └── fixtures/            # JSON event fixtures
 │       └── apigw_hello_event.json
 ├── events/                  # Sample event payloads for local testing
