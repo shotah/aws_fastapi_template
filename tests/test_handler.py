@@ -108,10 +108,13 @@ def test_nightly_email_schedule(
     Test Lambda handler with midnight scheduled event for nightly emails.
 
     This is an integration test that verifies:
-    - EventBridge schedule triggers the Lambda
-    - Lambda handler routes based on task field
+    - EventBridge schedule triggers the Lambda (using API Gateway event format)
+    - Lambda handler routes via app.resolve() to /tasks/nightly-email endpoint
     - EmailService sends the daily report
-    - Proper status code and message are returned
+    - Proper ApiResponse format is returned
+
+    NOTE: EventBridge sends an API Gateway-compatible event (see template.yaml)
+    This allows scheduled tasks to use the same exception handling path.
     """
     import os
 
@@ -120,16 +123,36 @@ def test_nightly_email_schedule(
     os.environ["ADMIN_EMAIL"] = admin_email
     os.environ["ENVIRONMENT"] = "Test"
 
-    # Create a scheduled event with task identifier
-    # This matches the NightlySchedule Input in template.yaml
-    scheduled_event = {"task": "nightly-email"}
+    # Create a scheduled event in API Gateway format
+    # EventBridge sends this format (see template.yaml NightlySchedule Input)
+    # This allows scheduled tasks to use the same exception handling as API endpoints
+    scheduled_event = {
+        "httpMethod": "POST",
+        "path": "/tasks/nightly-email",
+        "body": "",
+        "headers": {},
+        "requestContext": {
+            "accountId": "scheduled-event",
+            "requestId": "eventbridge-scheduled-task",
+            "httpMethod": "POST",
+            "path": "/tasks/nightly-email",
+        },
+        "resource": "/tasks/nightly-email",
+        "isBase64Encoded": False,
+        "queryStringParameters": None,
+        "pathParameters": None,
+    }
 
     ret = lambda_handler(scheduled_event, lambda_context)
 
-    # Verify successful email sending
+    # Should return API Gateway response with ApiResponse body
     assert ret["statusCode"] == 200
-    assert "Email sent successfully" in ret["body"]
-    assert "MessageId" in ret["body"]
+    body = json.loads(ret["body"])
+    assert body["success"] is True
+    assert body["error"] is None
+    assert "Email sent successfully" in body["data"]["message"]
+    assert "message_id" in body["data"]
+    assert body["data"]["recipient"] == admin_email
 
 
 def test_health_check(base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext) -> None:

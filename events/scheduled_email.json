@@ -1,3 +1,16 @@
 {
-  "task": "nightly-email"
+  "httpMethod": "POST",
+  "path": "/tasks/nightly-email",
+  "body": "",
+  "headers": {},
+  "requestContext": {
+    "accountId": "scheduled-event",
+    "requestId": "eventbridge-scheduled-task",
+    "httpMethod": "POST",
+    "path": "/tasks/nightly-email"
+  },
+  "resource": "/tasks/nightly-email",
+  "isBase64Encoded": false,
+  "queryStringParameters": null,
+  "pathParameters": null
 }

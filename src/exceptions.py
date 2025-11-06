@@ -52,9 +52,38 @@ class NotFoundError(AppException):
         super().__init__(message, status_code=404, details=details)
 
 
+class ScheduledTaskError(AppException):
+    """Scheduled task failure (500)."""
+
+    def __init__(self, message: str, details: dict | None = None) -> None:
+        super().__init__(message, status_code=500, details=details)
+
+
 # ============================================================================
-# Exception Handler Registration
+# Exception Handler Registration & Formatting
 # ============================================================================
+
+
+def format_exception_response(ex: AppException) -> dict:
+    """
+    Format an AppException into ApiResponse format.
+
+    This is the single source of truth for exception formatting,
+    used by both API Gateway handlers and scheduled event handlers.
+
+    Args:
+        ex: The AppException to format
+
+    Returns:
+        dict: ApiResponse formatted error
+    """
+    from models import ApiResponse  # type: ignore
+
+    return ApiResponse(
+        success=False,
+        data=None,
+        error={"type": ex.__class__.__name__, "message": ex.message, "details": ex.details},
+    ).model_dump()
 
 
 def register_exception_handlers(app: "APIGatewayRestResolver") -> None:
@@ -62,6 +91,10 @@ def register_exception_handlers(app: "APIGatewayRestResolver") -> None:
     Register all exception handlers for the API Gateway resolver.
 
     This keeps app.py clean by centralizing exception handling logic here.
+
+    Handlers are checked in order:
+    1. AppException subclasses (ValidationError, NotFoundError, etc.) - formatted responses
+    2. Generic Exception - wrapped in 500 error
 
     Args:
         app: The APIGatewayRestResolver instance to register handlers on
@@ -74,24 +107,24 @@ def register_exception_handlers(app: "APIGatewayRestResolver") -> None:
     # Import at runtime to avoid circular dependency
     from aws_lambda_powertools.event_handler import Response
 
-    from models import ApiResponse  # type: ignore
-
     @app.exception_handler(AppException)
     def handle_app_exception(ex: AppException) -> Response:
-        """Convert custom exceptions to consistent ApiResponse envelope."""
-        response = ApiResponse(
-            success=False,
-            data=None,
-            error={"type": ex.__class__.__name__, "message": ex.message, "details": ex.details},
-        )
+        """
+        Convert custom AppException subclasses to consistent ApiResponse envelope.
+
+        Handles: ValidationError, NotFoundError, ScheduledTaskError, etc.
+        """
+        response_body = format_exception_response(ex)
         return Response(
-            status_code=ex.status_code, content_type="application/json", body=response.model_dump()
+            status_code=ex.status_code, content_type="application/json", body=response_body
         )
 
-    # NOTE: Pydantic type validation errors (e.g., string instead of int) are handled by
-    # Powertools internally when enable_validation=True. They return 422 in Powertools' format:
-    # {"statusCode": 422, "detail": [{" loc": ["body", "field"], "msg": "...", "type": "..."}]}
+    # NOTE: We DON'T register a catch-all Exception handler because:
+    # 1. Powertools handles its own RequestValidationError (Pydantic validation) -> returns 422
+    # 2. Other unexpected exceptions should fail loudly in development
+    # 3. In production, Lambda catches unhandled exceptions and logs them to CloudWatch
     #
-    # Our custom business logic validation errors (raised via ValidationError, NotFoundError, etc.)
-    # go through handle_app_exception above and return in our ApiResponse
-    # envelope format.
+    # Exception Handling Summary:
+    # - AppException subclasses (ValidationError, NotFoundError) -> ApiResponse format (above)
+    # - RequestValidationError (Pydantic/schema errors) -> Powertools format (422)
+    # - Other exceptions -> Let Lambda/CloudWatch handle (500)

@@ -258,7 +258,26 @@ Resources:
             Schedule: cron(0 0 * * ? *)
             # Alternative: Use rate expression for simpler schedules
             # Schedule: rate(1 day)
-            Input: '{"task": "nightly-email"}'
+            # EventBridge sends an API Gateway-compatible event format
+            # This allows scheduled tasks to use the same exception handling as API endpoints
+            # Benefits: unified error handling, could call via API Gateway for testing
+            Input: |
+              {
+                "httpMethod": "POST",
+                "path": "/tasks/nightly-email",
+                "body": "",
+                "headers": {},
+                "requestContext": {
+                  "accountId": "scheduled-event",
+                  "requestId": "eventbridge-scheduled-task",
+                  "httpMethod": "POST",
+                  "path": "/tasks/nightly-email"
+                },
+                "resource": "/tasks/nightly-email",
+                "isBase64Encoded": false,
+                "queryStringParameters": null,
+                "pathParameters": null
+              }
       # Environment variables for Lambda function
       # - For local dev: Use env.json (see env.json.example)
       # - For deployment: Set values below or use Parameters

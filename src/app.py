@@ -352,7 +352,6 @@ def delete_file(file_id: str) -> dict[str, Any]:
         logger.info(f"File deleted successfully: {file_id}")
 
         return {"file_id": file_id, "message": "File deleted successfully"}
-
     except NotFoundError:
         raise
     except Exception as e:
@@ -361,91 +360,80 @@ def delete_file(file_id: str) -> dict[str, Any]:
         raise ValidationError(f"Failed to delete file: {str(e)}")
 
 
-def send_scheduled_emails() -> dict[str, Any]:
-    """
-    Send scheduled emails via SES.
+# ============================================================================
+# Scheduled Task Endpoints
+# ============================================================================
+# NOTE: These endpoints are triggered by EventBridge on a schedule, but they're
+# implemented as regular API endpoints. This allows them to:
+# 1. Use the same exception handling as API endpoints (register_exception_handlers)
+# 2. Be tested/triggered manually via API Gateway if needed
+# 3. Maintain consistent response format (ApiResponse)
+#
+# EventBridge sends an API Gateway-compatible event (see template.yaml NightlySchedule)
 
-    This function is called by the midnight cron schedule.
-    Uses the EmailService to send templated daily reports.
+
+@app.post("/tasks/nightly-email")
+@unified_response
+@tracer.capture_method
+def trigger_nightly_email() -> dict[str, Any]:
     """
-    logger.info("Starting scheduled email send")
+    Send scheduled nightly emails via SES.
+
+    This endpoint is triggered by EventBridge at midnight (see template.yaml).
+    Can also be called manually via API Gateway for testing.
+
+    Returns:
+        Dict with success message (automatically wrapped in ApiResponse by decorator)
+
+    Raises:
+        ValidationError: If email sending fails (caught by register_exception_handlers)
+    """
     metrics.add_metric(name="ScheduledEmailsSent", unit=MetricUnit.Count, value=1)
 
-    try:
-        # Get admin email from environment
-        admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    # Get admin email from environment
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
 
-        # Get email service and send daily report
-        email_service = get_email_service()
+    # Get email service and send daily report
+    email_service = get_email_service()
 
-        # Optional: Customize report content here
-        # custom_content = "<h2>Custom Report</h2><p>Your data here</p>"
-        # message_id = email_service.send_daily_report(
-        #     [admin_email], report_content=custom_content
-        # )
+    # Optional: Customize report content here
+    # custom_content = "<h2>Custom Report</h2><p>Your data here</p>"
+    # message_id = email_service.send_daily_report(
+    #     [admin_email], report_content=custom_content
+    # )
 
-        # Send default daily report
-        message_id = email_service.send_daily_report(to_addresses=[admin_email])
+    # Send default daily report - exceptions caught by register_exception_handlers
+    message_id = email_service.send_daily_report(to_addresses=[admin_email])
 
-        metrics.add_metric(name="EmailsSentSuccess", unit=MetricUnit.Count, value=1)
+    metrics.add_metric(name="EmailsSentSuccess", unit=MetricUnit.Count, value=1)
+    logger.info(
+        "Nightly email sent successfully",
+        extra={"message_id": message_id, "recipient": admin_email},
+    )
 
-        return {
-            "statusCode": 200,
-            "body": f"Email sent successfully. MessageId: {message_id}",
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to send scheduled email: {str(e)}")
-        metrics.add_metric(name="EmailSendErrors", unit=MetricUnit.Count, value=1)
-        return {"statusCode": 500, "body": f"Failed to send email: {str(e)}"}
-
-
-def handle_scheduled_event(event: dict) -> dict[str, Any]:
-    """
-    Handle EventBridge scheduled events with task-based routing.
-
-    This function is called when the Lambda is triggered by a schedule,
-    not through API Gateway.
-
-    Expects an event with a 'task' field:
-    - {"task": "nightly-email"} -> Send daily email reports
-    - Add more tasks as needed
-    """
-    logger.info("Scheduled event triggered", extra={"event": event})
-    metrics.add_metric(name="ScheduledExecutions", unit=MetricUnit.Count, value=1)
-
-    # Route based on task type
-    task = event.get("task")
-
-    if task == "nightly-email":
-        logger.info("Triggering nightly email send")
-        return send_scheduled_emails()
-
-    # Unknown or missing task
-    logger.warning(f"Unknown scheduled task: {task}")
-    return {"statusCode": 400, "body": f"Unknown task: {task}"}
+    return {
+        "message": f"Email sent successfully. MessageId: {message_id}",
+        "message_id": message_id,
+        "recipient": admin_email,
+    }
 
 
-# Enrich logging with contextual information from Lambda
 @logger.inject_lambda_context(correlation_id_path=correlation_paths.API_GATEWAY_REST)
-# Adding tracer
-# See: https://awslabs.github.io/aws-lambda-powertools-python/latest/core/tracer/
 @tracer.capture_lambda_handler
-# ensures metrics are flushed upon request completion/failure and
-# capturing ColdStart metric
 @metrics.log_metrics(capture_cold_start_metric=True)
 def lambda_handler(event: dict, context: LambdaContext) -> dict[str, Any]:
     """
-    Main Lambda handler that routes to appropriate handler based on event source.
+    Main Lambda handler for API Gateway events.
 
-    Supports:
-    - API Gateway events (HTTP requests)
-    - EventBridge Schedule events with task field (e.g., {"task": "nightly-email"})
+    All events (HTTP requests and EventBridge scheduled tasks) go through app.resolve().
+    This provides unified exception handling via register_exception_handlers(app).
+
+    Event Sources:
+    - API Gateway: Real HTTP requests from users
+    - EventBridge: Scheduled tasks formatted as API Gateway events (see template.yaml)
+
+    Exception Handling:
+    - All exceptions caught by register_exception_handlers(app)
+    - Returns consistent ApiResponse format for both event types
     """
-    # Check if this is a scheduled event with task identifier
-    if "task" in event:
-        logger.info(f"Detected scheduled task: {event.get('task')}")
-        return handle_scheduled_event(event)
-
-    # Otherwise, treat as API Gateway event
     return app.resolve(event, context)

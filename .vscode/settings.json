@@ -45,6 +45,7 @@
     "Connor",
     "dmypy",
     "dotenv",
+    "eventbridge",
     "exitfirst",
     "FASTAPI",
     "flake",
