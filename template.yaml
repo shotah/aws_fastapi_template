@@ -192,12 +192,6 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /health
             Method: GET
-        HelloPath:
-          Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /hello
-            Method: GET
             # ============================================================
             # Endpoint Authorization (Uncomment to require authentication)
             # ============================================================
@@ -212,42 +206,72 @@ Resources:
             # Option 3: Make endpoint public (if global auth is enabled)
             # Auth:
             #   Authorizer: NONE
+            Auth:
+              Authorizer: AWS_IAM
+        HelloPath:
+          Type: Api # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /hello
+            Method: GET
+            Auth:
+              Authorizer: AWS_IAM
         GetUser:
           Type: Api # Get user by ID
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /users/{user_id}
             Method: GET
+            Auth:
+              Authorizer: AWS_IAM
         CreateUser:
           Type: Api # Create new user
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /users
             Method: POST
+            Auth:
+              Authorizer: AWS_IAM
         UploadFile:
           Type: Api # Upload file to S3
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /files
             Method: POST
+            Auth:
+              Authorizer: AWS_IAM
         ListFiles:
           Type: Api # List files in S3
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /files
             Method: GET
+            Auth:
+              Authorizer: AWS_IAM
         DownloadFile:
           Type: Api # Download file from S3
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /files/{file_id}
             Method: GET
+            Auth:
+              Authorizer: AWS_IAM
         DeleteFile:
           Type: Api # Delete file from S3
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /files/{file_id}
             Method: DELETE
+            Auth:
+              Authorizer: AWS_IAM
+        TriggerNightlyEmail:
+          Type: Api # Manual trigger for nightly email (also triggered by EventBridge)
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/nightly-email
+            Method: POST
+            Auth:
+              Authorizer: AWS_IAM
         NightlySchedule:
           Type: Schedule # More info: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-schedule.html
           Properties:
