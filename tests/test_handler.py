@@ -123,24 +123,17 @@ def test_nightly_email_schedule(
     os.environ["ADMIN_EMAIL"] = admin_email
     os.environ["ENVIRONMENT"] = "Test"
 
-    # Create a scheduled event in API Gateway format
+    # Create a minimal scheduled event in API Gateway format
     # EventBridge sends this format (see template.yaml NightlySchedule Input)
     # This allows scheduled tasks to use the same exception handling as API endpoints
     scheduled_event = {
         "httpMethod": "POST",
         "path": "/tasks/nightly-email",
-        "body": "",
-        "headers": {},
-        "requestContext": {
-            "accountId": "scheduled-event",
-            "requestId": "eventbridge-scheduled-task",
-            "httpMethod": "POST",
-            "path": "/tasks/nightly-email",
-        },
         "resource": "/tasks/nightly-email",
+        "requestContext": {
+            "requestId": "eventbridge-scheduled-task",
+        },
         "isBase64Encoded": False,
-        "queryStringParameters": None,
-        "pathParameters": None,
     }
 
     ret = lambda_handler(scheduled_event, lambda_context)
