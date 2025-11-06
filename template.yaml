@@ -35,6 +35,17 @@ Parameters:
       - ERROR
       - CRITICAL
 
+  # Email configuration for SES
+  FromEmail:
+    Type: String
+    Description: Verified email address to send emails from (must be verified in SES)
+    Default: "your-verified-email@example.com"
+
+  AdminEmail:
+    Type: String
+    Description: Admin email address to receive scheduled emails
+    Default: "admin@example.com"
+
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
     Timeout: 150
@@ -166,6 +177,9 @@ Resources:
         # Allow S3 access to the DataBucket
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
+        # Allow sending emails via SES
+        - SESCrudPolicy:
+            IdentityName: "*"
         # Add more policies as needed:
         # - DynamoDBCrudPolicy:
         #     TableName: !Ref MyTable
@@ -237,14 +251,14 @@ Resources:
         NightlySchedule:
           Type: Schedule # More info: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-schedule.html
           Properties:
-            Description: Trigger Lambda nightly at midnight UTC
+            Description: Trigger Lambda nightly at midnight UTC to send emails
             Enabled: true
             # Cron format: cron(Minutes Hours Day-of-month Month Day-of-week Year)
             # This runs at 00:00 UTC every day
             Schedule: cron(0 0 * * ? *)
             # Alternative: Use rate expression for simpler schedules
             # Schedule: rate(1 day)
-            Input: '{"source": "scheduled-event", "action": "nightly-processing"}'
+            Input: '{"task": "nightly-email"}'
       # Environment variables for Lambda function
       # - For local dev: Use env.json (see env.json.example)
       # - For deployment: Set values below or use Parameters
@@ -260,6 +274,9 @@ Resources:
           # API_KEY: !Ref ApiKeyParameter
           # DATABASE_URL: !Sub "https://${DatabaseEndpoint}"
           DATA_BUCKET: !Ref DataBucket # Reference S3 bucket
+          # Email configuration for SES
+          FROM_EMAIL: !Ref FromEmail
+          ADMIN_EMAIL: !Ref AdminEmail
           # SQS_QUEUE_URL: !Ref ProcessingQueue  # Reference SQS queue
           # For secrets, use AWS Secrets Manager:
           # SECRET_ARN: arn:aws:secretsmanager:region:account:secret:name
@@ -267,6 +284,71 @@ Resources:
       Tags:
         LambdaPowertools: python
         # Environment, CostCenter, ManagedBy tags inherited from Globals.Function.Tags
+
+  # ============================================================================
+  # SES Email Identity (Commented Example - Added in CloudFormation June 2022)
+  # ============================================================================
+  # Uncomment to automatically verify a domain or email address in SES:
+  # SESEmailIdentity:
+  #   Type: AWS::SES::EmailIdentity
+  #   Properties:
+  #     EmailIdentity: !Ref FromEmail  # Can be email or domain (e.g., "example.com")
+  #     # Optional: Configure DKIM signing
+  #     DkimSigningAttributes:
+  #       NextSigningKeyLength: RSA_2048_BIT
+  #     # Optional: Add configuration set
+  #     # ConfigurationSetAttributes:
+  #     #   ConfigurationSetName: !Ref MySESConfigurationSet
+  #
+  # # If using a domain (not individual email), automatically add DKIM DNS records to Route53:
+  # # (Skip this if you're verifying individual emails or using external DNS)
+  # SESRoute53DKIMRecords:
+  #   Type: AWS::Route53::RecordSetGroup
+  #   Properties:
+  #     HostedZoneId: Z1234567890ABC  # Replace with your Route53 Hosted Zone ID
+  #     RecordSets:
+  #       - Name: !GetAtt SESEmailIdentity.DkimDNSTokenName1
+  #         Type: CNAME
+  #         TTL: '3600'
+  #         ResourceRecords:
+  #           - !GetAtt SESEmailIdentity.DkimDNSTokenValue1
+  #       - Name: !GetAtt SESEmailIdentity.DkimDNSTokenName2
+  #         Type: CNAME
+  #         TTL: '3600'
+  #         ResourceRecords:
+  #           - !GetAtt SESEmailIdentity.DkimDNSTokenValue2
+  #       - Name: !GetAtt SESEmailIdentity.DkimDNSTokenName3
+  #         Type: CNAME
+  #         TTL: '3600'
+  #         ResourceRecords:
+  #           - !GetAtt SESEmailIdentity.DkimDNSTokenValue3
+  #
+  # # Optional: SES Configuration Set for tracking opens, clicks, bounces, etc.
+  # # MySESConfigurationSet:
+  # #   Type: AWS::SES::ConfigurationSet
+  # #   Properties:
+  # #     Name: !Sub "${AWS::StackName}-ses-config"
+  # #     TrackingOptions:
+  # #       CustomRedirectDomain: track.example.com  # Optional custom tracking domain
+  # #
+  # # # Optional: Send SES events (bounces, complaints, etc.) to CloudWatch
+  # # MySESEventDestination:
+  # #   Type: AWS::SES::ConfigurationSetEventDestination
+  # #   Properties:
+  # #     ConfigurationSetName: !Ref MySESConfigurationSet
+  # #     EventDestination:
+  # #       Name: CloudWatchDestination
+  # #       Enabled: true
+  # #       MatchingEventTypes:
+  # #         - send
+  # #         - bounce
+  # #         - complaint
+  # #         - delivery
+  # #       CloudWatchDestination:
+  # #         DimensionConfigurations:
+  # #           - DimensionName: ses:configuration-set
+  # #             DimensionValueSource: messageTag
+  # #             DefaultDimensionValue: !Ref MySESConfigurationSet
 
   # ============================================================================
   # S3 Bucket for Application Data

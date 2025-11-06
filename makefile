@@ -106,7 +106,7 @@ sync-dev: ## Sync all dependencies from Pipfile.lock (including dev)
 
 PHONY: lint
 lint: ## Run all linters (black, isort, flake8, etc)
-	pre-commit run --all-files
+	pipenv run pre-commit run --all-files
 
 PHONY: test
 test: ## Run all tests with coverage

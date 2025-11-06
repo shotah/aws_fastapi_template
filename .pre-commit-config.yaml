@@ -16,10 +16,7 @@ repos:
     hooks:
       - id: isort
         name: isort (python)
-  - repo: https://github.com/hhatto/autopep8
-    rev: v2.3.2
-    hooks:
-      - id: autopep8
+        # Config in pyproject.toml [tool.isort]
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.19.0
     hooks:
@@ -29,6 +26,7 @@ repos:
     rev: 24.10.0
     hooks:
       - id: black
+        # Config in pyproject.toml [tool.black]
   - repo: local
     hooks:
       - id: flake8

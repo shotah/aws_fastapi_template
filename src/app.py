@@ -19,6 +19,7 @@ from models import (
     UserCreateResponse,
     UserResponse,
 )
+from services.email import get_email_service  # type: ignore
 from services.storage import get_storage_service  # type: ignore
 
 app = APIGatewayRestResolver(enable_validation=True)
@@ -360,29 +361,69 @@ def delete_file(file_id: str) -> dict[str, Any]:
         raise ValidationError(f"Failed to delete file: {str(e)}")
 
 
+def send_scheduled_emails() -> dict[str, Any]:
+    """
+    Send scheduled emails via SES.
+
+    This function is called by the midnight cron schedule.
+    Uses the EmailService to send templated daily reports.
+    """
+    logger.info("Starting scheduled email send")
+    metrics.add_metric(name="ScheduledEmailsSent", unit=MetricUnit.Count, value=1)
+
+    try:
+        # Get admin email from environment
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+
+        # Get email service and send daily report
+        email_service = get_email_service()
+
+        # Optional: Customize report content here
+        # custom_content = "<h2>Custom Report</h2><p>Your data here</p>"
+        # message_id = email_service.send_daily_report(
+        #     [admin_email], report_content=custom_content
+        # )
+
+        # Send default daily report
+        message_id = email_service.send_daily_report(to_addresses=[admin_email])
+
+        metrics.add_metric(name="EmailsSentSuccess", unit=MetricUnit.Count, value=1)
+
+        return {
+            "statusCode": 200,
+            "body": f"Email sent successfully. MessageId: {message_id}",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to send scheduled email: {str(e)}")
+        metrics.add_metric(name="EmailSendErrors", unit=MetricUnit.Count, value=1)
+        return {"statusCode": 500, "body": f"Failed to send email: {str(e)}"}
+
+
 def handle_scheduled_event(event: dict) -> dict[str, Any]:
     """
-    Handle EventBridge scheduled events (e.g., nightly processing).
+    Handle EventBridge scheduled events with task-based routing.
 
     This function is called when the Lambda is triggered by a schedule,
     not through API Gateway.
+
+    Expects an event with a 'task' field:
+    - {"task": "nightly-email"} -> Send daily email reports
+    - Add more tasks as needed
     """
     logger.info("Scheduled event triggered", extra={"event": event})
     metrics.add_metric(name="ScheduledExecutions", unit=MetricUnit.Count, value=1)
 
-    # Extract custom input from the schedule event
-    event_source = event.get("source", "unknown")
-    detail = event.get("detail", {})
+    # Route based on task type
+    task = event.get("task")
 
-    # Your nightly processing logic here
-    logger.info("Running nightly processing", extra={"source": event_source, "detail": detail})
+    if task == "nightly-email":
+        logger.info("Triggering nightly email send")
+        return send_scheduled_emails()
 
-    # Example: Add your business logic here
-    # users_service = Users()
-    # users_service.run_nightly_cleanup()
-    # users_service.generate_reports()
-
-    return {"statusCode": 200, "body": "Scheduled processing completed successfully"}
+    # Unknown or missing task
+    logger.warning(f"Unknown scheduled task: {task}")
+    return {"statusCode": 400, "body": f"Unknown task: {task}"}
 
 
 # Enrich logging with contextual information from Lambda
@@ -399,11 +440,11 @@ def lambda_handler(event: dict, context: LambdaContext) -> dict[str, Any]:
 
     Supports:
     - API Gateway events (HTTP requests)
-    - EventBridge Schedule events (cron/rate)
+    - EventBridge Schedule events with task field (e.g., {"task": "nightly-email"})
     """
-    # Check if this is a scheduled event from EventBridge
-    if event.get("source") == "aws.events" and event.get("detail-type") == "Scheduled Event":
-        logger.info("Detected EventBridge scheduled event")
+    # Check if this is a scheduled event with task identifier
+    if "task" in event:
+        logger.info(f"Detected scheduled task: {event.get('task')}")
         return handle_scheduled_event(event)
 
     # Otherwise, treat as API Gateway event

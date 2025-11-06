@@ -125,3 +125,52 @@ def mock_s3_bucket(s3_client) -> str:
     os.environ["DATA_BUCKET"] = bucket_name
 
     return bucket_name
+
+
+@pytest.fixture(scope="function")
+def ses_client(aws_credentials) -> Generator:
+    """
+    Create a mocked SES client for testing.
+
+    This fixture:
+    - Starts moto's mock_aws context
+    - Creates a boto3 SES client
+    - Yields the client for test use
+    - Automatically tears down after test completes
+
+    Usage in tests:
+        def test_email(ses_client):
+            # SES operations here will be mocked
+            ses_client.verify_email_identity(EmailAddress='test@example.com')
+    """
+    with mock_aws():
+        yield boto3.client("ses", region_name="us-east-1")
+
+
+@pytest.fixture(scope="function")
+def mock_verified_email(ses_client) -> str:
+    """
+    Create a verified email address for testing.
+
+    This fixture:
+    - Uses the ses_client fixture (which starts moto mocking)
+    - Verifies a test email address "sender@example.com"
+    - Sets FROM_EMAIL env var (used by EmailService)
+    - Returns the email address for test use
+
+    Usage in tests:
+        def test_email(mock_verified_email):
+            # EmailService will use "sender@example.com"
+            # All SES operations are mocked
+            email_service = get_email_service()
+            email_service.send_email(...)
+    """
+    email = "sender@example.com"
+
+    # Verify the email identity in mocked SES
+    ses_client.verify_email_identity(EmailAddress=email)
+
+    # Set environment variable that EmailService uses
+    os.environ["FROM_EMAIL"] = email
+
+    return email

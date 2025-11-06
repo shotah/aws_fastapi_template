@@ -101,25 +101,35 @@ def test_create_user_invalid_age(
     assert ret["statusCode"] == 422
 
 
-def test_scheduled_event(lambda_context: MockLambdaContext) -> None:
-    """Test the Lambda handler with a scheduled EventBridge event"""
-    # Create a mock EventBridge scheduled event
-    scheduled_event = {
-        "version": "0",
-        "id": "89d1a02d-5ec7-412e-82f5-13505f849b41",
-        "detail-type": "Scheduled Event",
-        "source": "aws.events",
-        "account": "123456789012",
-        "time": "2024-01-15T00:00:00Z",
-        "region": "us-east-1",
-        "resources": ["arn:aws:events:us-east-1:123456789012:rule/NightlyProcessing"],
-        "detail": {},
-    }
+def test_nightly_email_schedule(
+    lambda_context: MockLambdaContext, mock_verified_email: str
+) -> None:
+    """
+    Test Lambda handler with midnight scheduled event for nightly emails.
+
+    This is an integration test that verifies:
+    - EventBridge schedule triggers the Lambda
+    - Lambda handler routes based on task field
+    - EmailService sends the daily report
+    - Proper status code and message are returned
+    """
+    import os
+
+    # Set up admin email for daily report
+    admin_email = "admin@example.com"
+    os.environ["ADMIN_EMAIL"] = admin_email
+    os.environ["ENVIRONMENT"] = "Test"
+
+    # Create a scheduled event with task identifier
+    # This matches the NightlySchedule Input in template.yaml
+    scheduled_event = {"task": "nightly-email"}
 
     ret = lambda_handler(scheduled_event, lambda_context)
 
+    # Verify successful email sending
     assert ret["statusCode"] == 200
-    assert "Scheduled processing completed successfully" in ret["body"]
+    assert "Email sent successfully" in ret["body"]
+    assert "MessageId" in ret["body"]
 
 
 def test_health_check(base_apigw_event: dict[str, Any], lambda_context: MockLambdaContext) -> None:
@@ -262,8 +272,9 @@ def test_create_user_type_error(
     # Should return 422 (Unprocessable Entity) for Pydantic validation error
     assert ret["statusCode"] == 422
 
-    # Powertools returns validation errors in its own format (not our ApiResponse wrapper)
-    # Format: {"statusCode": 422, "detail": [{"loc": ["body", "age"], "msg": "...", "type": "..."}]}
+    # Powertools returns validation errors in its own format
+    # (not our ApiResponse wrapper)
+    # Format: {"statusCode": 422, "detail": [{"loc": ["body", "age"], ...}]}
     assert "statusCode" in response or "detail" in response or "message" in response
 
     # Verify the error mentions the age field
