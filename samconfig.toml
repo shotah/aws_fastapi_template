@@ -38,7 +38,9 @@ confirm_changeset = false  # No confirmation needed in sandbox
 resolve_s3 = true
 parameter_overrides = [
   "Environment=Sandbox",
-  "LogLevel=DEBUG"
+  "LogLevel=DEBUG",
+  "FromEmail=your-verified-email@example.com",
+  "AdminEmail=admin@example.com"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -64,7 +66,9 @@ confirm_changeset = false  # Auto-confirm in dev
 resolve_s3 = true
 parameter_overrides = [
   "Environment=Dev",
-  "LogLevel=INFO"
+  "LogLevel=INFO",
+  "FromEmail=your-verified-email@example.com",
+  "AdminEmail=admin@example.com"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -90,7 +94,9 @@ confirm_changeset = true  # ALWAYS confirm in prod!
 resolve_s3 = true
 parameter_overrides = [
   "Environment=Prod",
-  "LogLevel=WARNING"
+  "LogLevel=WARNING",
+  "FromEmail=your-verified-email@example.com",
+  "AdminEmail=admin@example.com"
   # Add your production-specific parameters:
   # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/prod-lambda-role"
 ]

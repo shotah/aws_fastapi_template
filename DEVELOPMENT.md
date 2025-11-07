@@ -1,1221 +1,655 @@
 # Development Guide
 
-This guide will help you set up your development environment for working with this AWS Lambda SAM template.
+Complete setup and deployment guide for the AWS Lambda SAM template.
 
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-  - [Windows](#windows)
-  - [macOS](#macos)
-  - [Linux](#linux)
+- [Prerequisites & Installation](#prerequisites--installation)
 - [Project Setup](#project-setup)
-- [Common Workflows](#common-workflows)
+- [Environment Variables & Configuration](#environment-variables--configuration)
+- [Development Workflow](#development-workflow)
 - [Testing](#testing)
 - [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
 
-## Prerequisites
+---
 
-Before you begin, you'll need to install the following tools:
+## Prerequisites & Installation
 
-- **Python 3.13** - The runtime for this Lambda function
-- **Make** - Build automation tool
-- **Pipenv** - Python dependency management
-- **AWS CLI** - For AWS credentials and deployment
-- **AWS SAM CLI** - For building and testing Lambda functions locally
-- **Docker** - Required for SAM local testing
+**Required Tools:**
 
-## Installation
+- Python 3.13
+- Make
+- Pipenv
+- AWS CLI
+- AWS SAM CLI
+- Docker
 
-### Windows
+### Quick Install
 
-Using [Chocolatey](https://chocolatey.org/) package manager:
+<details>
+<summary><b>Windows (Chocolatey)</b></summary>
 
 ```powershell
-# Install Python 3.13
 choco install python --version=3.13.8 --force
-
-# Install Make
-choco install make
-
-# Install AWS CLI
-choco install awscli -y
-
-# Install AWS SAM CLI
-choco install awssamcli -y
-
-# Install Docker Desktop
-choco install docker-desktop -y
-
-# Install Pipenv
+choco install make awscli awssamcli docker-desktop -y
 pip install pipenv
-
-# Verify installations
-python --version        # Should show Python 3.13.x
-make --version
-aws --version
-sam --version
-docker --version
-pipenv --version
 ```
 
-**Note:** You may need to restart your terminal after installation.
+</details>
 
-### macOS
-
-Using [Homebrew](https://brew.sh/) package manager:
+<details>
+<summary><b>macOS (Homebrew)</b></summary>
 
 ```bash
-# Install Python 3.13
-brew install python@3.13
-
-# Make is pre-installed on macOS
-# If needed: xcode-select --install
-
-# Install AWS CLI
-brew install awscli
-
-# Install AWS SAM CLI
-brew install aws-sam-cli
-
-# Install Docker Desktop
+brew install python@3.13 awscli aws-sam-cli pipenv
 brew install --cask docker
-
-# Install Pipenv
-brew install pipenv
-
-# Verify installations
-python3.13 --version
-make --version
-aws --version
-sam --version
-docker --version
-pipenv --version
 ```
 
-### Linux (Ubuntu/Debian)
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu/Debian)</b></summary>
 
 ```bash
-# Install Python 3.13
-sudo apt update
-sudo apt install -y software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install -y python3.13 python3.13-venv python3-pip
+# Python 3.13
+sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt update
+sudo apt install -y python3.13 python3.13-venv python3-pip make docker.io
 
-# Install Make (usually pre-installed)
-sudo apt install -y make
-
-# Install AWS CLI
+# AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
+unzip awscliv2.zip && sudo ./aws/install
 
-# Install AWS SAM CLI
+# AWS SAM CLI
 wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
-sudo ./sam-installation/install
+unzip aws-sam-cli-linux-x86_64.zip -d sam-installation && sudo ./sam-installation/install
 
-# Install Docker
-sudo apt install -y docker.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
-
-# Install Pipenv
 pip3 install pipenv
-
-# Log out and back in for Docker group changes to take effect
 ```
 
-## Project Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone <your-repo-url>
-   cd aws_fastapi_template
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   make install-dev
-   ```
-   This will:
-   - Create a virtual environment using Pipenv
-   - Install all Python dependencies (including dev tools)
-
-3. **Install pre-commit hooks:**
-   ```bash
-   make hooks
-   ```
-   This installs git hooks that automatically run linters before each commit.
-
-4. **Configure AWS credentials:**
-   ```bash
-   aws configure
-   ```
-   You'll be prompted for:
-   - AWS Access Key ID
-   - AWS Secret Access Key
-   - Default region (e.g., `us-east-1`)
-   - Default output format (use `json`)
-
-5. **Verify your setup:**
-   ```bash
-   make aws-check   # Check AWS credentials
-   make test        # Run tests
-   ```
-
-## Environment Variables
-
-This project supports environment variables for both local development and production deployment.
-
-### Local Development (env.json)
-
-For local testing with `sam local`, you can use an `env.json` file:
-
-1. **Create your local environment file:**
-   ```bash
-   cp env.json.example env.json
-   ```
-
-2. **Edit `env.json` with your values:**
-   ```json
-   {
-     "HelloWorldFunction": {
-       "LOG_LEVEL": "DEBUG",
-       "API_KEY": "your-local-api-key",
-       "DATABASE_URL": "http://localhost:5432"
-     }
-   }
-   ```
-
-3. **The file is automatically used by `make start`:**
-   ```bash
-   make start
-   ```
-
-**Note:** `env.json` is in `.gitignore` and will never be committed. Always use `env.json.example` for documentation.
-
-### Production Deployment (template.yaml)
-
-Environment variables for deployed Lambda functions are defined in `template.yaml`:
-
-```yaml
-Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Environment:
-        Variables:
-          POWERTOOLS_SERVICE_NAME: PowertoolsHelloWorld
-          POWERTOOLS_METRICS_NAMESPACE: Powertools
-          LOG_LEVEL: INFO
-          # Add your custom variables here:
-          API_KEY: !Ref ApiKeyParameter
-          DATABASE_URL: !Sub "https://${DatabaseEndpoint}"
-```
-
-#### Option 1: Hard-code values (not recommended for secrets)
-
-```yaml
-Environment:
-  Variables:
-    MY_VAR: "my-value"
-```
-
-#### Option 2: Use Parameters (better for deployment-time values)
-
-Add to your `template.yaml`:
-
-```yaml
-Parameters:
-  ApiKey:
-    Type: String
-    Description: API Key for external service
-    NoEcho: true  # Hides value in CloudFormation console
-
-Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Environment:
-        Variables:
-          API_KEY: !Ref ApiKey
-```
-
-Then deploy with:
-```bash
-sam deploy --parameter-overrides ApiKey=your-secret-key
-```
-
-#### Option 3: Use AWS Secrets Manager (best for sensitive data)
-
-1. **Create a secret in AWS Secrets Manager:**
-   ```bash
-   aws secretsmanager create-secret \
-     --name my-app/api-key \
-     --secret-string "your-secret-value"
-   ```
-
-2. **Grant Lambda permission in `template.yaml`:**
-   ```yaml
-   Resources:
-     HelloWorldFunction:
-       Type: AWS::Serverless::Function
-       Properties:
-         Policies:
-           - AWSSecretsManagerGetSecretValuePolicy:
-               SecretArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:my-app/*'
-         Environment:
-           Variables:
-             SECRET_NAME: my-app/api-key
-   ```
-
-3. **Retrieve in your Lambda code:**
-   ```python
-   import boto3
-   import json
-   import os
-
-   def get_secret(secret_name):
-       client = boto3.client('secretsmanager')
-       response = client.get_secret_value(SecretId=secret_name)
-       return json.loads(response['SecretString'])
-
-   # In your Lambda handler
-   api_key = get_secret(os.environ['SECRET_NAME'])
-   ```
-
-#### Option 4: Use AWS Systems Manager Parameter Store (good for non-sensitive config)
-
-1. **Create a parameter:**
-   ```bash
-   aws ssm put-parameter \
-     --name /my-app/config/endpoint \
-     --value "https://api.example.com" \
-     --type String
-   ```
-
-2. **Grant Lambda permission in `template.yaml`:**
-   ```yaml
-   Resources:
-     HelloWorldFunction:
-       Type: AWS::Serverless::Function
-       Properties:
-         Policies:
-           - SSMParameterReadPolicy:
-               ParameterName: my-app/config/*
-   ```
-
-3. **Retrieve in your Lambda code:**
-   ```python
-   import boto3
-
-   def get_parameter(parameter_name):
-       ssm = boto3.client('ssm')
-       response = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
-       return response['Parameter']['Value']
-
-   # In your Lambda handler
-   endpoint = get_parameter('/my-app/config/endpoint')
-   ```
-
-### Environment Variables Reference
-
-Current environment variables used by this template:
-
-| Variable | Local (env.json) | Production (template.yaml) | Description |
-|----------|------------------|----------------------------|-------------|
-| `POWERTOOLS_SERVICE_NAME` | Optional | ✓ Set | Service name for Powertools logging |
-| `POWERTOOLS_METRICS_NAMESPACE` | Optional | ✓ Set | Namespace for CloudWatch metrics |
-| `LOG_LEVEL` | Optional | ✓ Set | Logging level (DEBUG, INFO, WARNING, ERROR) |
-
-## Common Workflows
-
-### View Available Commands
-
-```bash
-make help
-```
-
-Or simply:
-```bash
-make
-```
-
-### Development Cycle
-
-```bash
-# 1. Make code changes
-# Edit files in src/
-
-# 2. Run linters
-make lint
-
-# 3. Run tests
-make test
-
-# 4. Test locally
-make start
-# Then visit: http://127.0.0.1:3000/hello
-
-# 5. Invoke function directly
-make invoke
-```
-
-### Running the API Locally
-
-```bash
-# Build and start local API Gateway
-make start
-```
-
-This will:
-- Build your Lambda function in a Docker container
-- Start a local API Gateway on `http://127.0.0.1:3000`
-- Hot-reload your code changes (after rebuild)
-
-**Available Endpoints:**
-- `GET http://127.0.0.1:3000/health` - Health check endpoint
-- `GET http://127.0.0.1:3000/hello` - Hello World example (uses helper module)
-- `POST http://127.0.0.1:3000/users` - Create user (demonstrates Pydantic validation)
-- `GET http://127.0.0.1:3000/users/{id}` - Get user by ID (demonstrates error handling)
-
-**Test with curl:**
-```bash
-# Health check
-curl http://127.0.0.1:3000/health
-
-# Hello endpoint
-curl http://127.0.0.1:3000/hello
-
-# Create user
-curl -X POST http://127.0.0.1:3000/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "John Doe", "email": "john@example.com", "age": 30}'
-
-# Get user
-curl http://127.0.0.1:3000/users/1000
-```
-
-To stop the server, press `Ctrl+C`.
+</details>
 
 ---
 
-## API Gateway Authorization
+## Project Setup
 
-The template supports multiple authorization strategies. **AWS IAM authorization is recommended for enterprise/service-to-service communication.**
+```bash
+# 1. Clone and install
+git clone <your-repo-url>
+cd aws_fastapi_template
+make install-dev
 
-### Option 1: AWS IAM Authorization (Recommended)
+# 2. Install pre-commit hooks
+make hooks
 
-Requires AWS SigV4 signed requests using IAM credentials. Best for:
-- Service-to-service communication
-- Pre-existing IAM roles/policies
-- AWS SDK clients (boto3, AWS CLI, etc.)
+# 3. Configure AWS credentials
+aws configure
 
-#### Enable IAM Authorization
+# 4. Verify setup
+make test
+```
 
-In `template.yaml`, uncomment the Auth section for any endpoint:
+---
+
+## Environment Variables & Configuration
+
+### Quick Reference: Choose Your Approach
+
+| Use Case | Solution | Cost | Best For |
+|----------|----------|------|----------|
+| Local development | `env.json` | Free | Testing locally |
+| Non-sensitive config | SAM Parameters | Free | Email, log levels, flags |
+| Semi-sensitive | Parameter Store | Free | API endpoints, URLs |
+| Highly sensitive | Secrets Manager | $0.40/mo | Passwords, API keys |
+
+### 1. Local Development (`env.json`)
+
+```bash
+# Create from example
+cp env.json.example env.json
+
+# Edit with your values
+{
+  "HelloWorldFunction": {
+    "LOG_LEVEL": "DEBUG",
+    "API_KEY": "local-dev-key"
+  }
+}
+
+# Automatically used by make start
+```
+
+### 2. AWS Deployment - SAM Parameters
+
+**For non-sensitive values like emails, log levels**
+
+Edit `samconfig.toml`:
+
+```toml
+[sandbox.deploy.parameters]
+parameter_overrides = [
+  "Environment=Sandbox",
+  "LogLevel=DEBUG",
+  "FromEmail=sandbox@example.com",
+  "AdminEmail=admin@example.com"
+]
+# Optional: target specific AWS account
+# profile = "sandbox"
+# region = "us-east-1"
+```
+
+Deploy: `make deploy-sandbox`
+
+### 3. AWS Secrets Manager
+
+**For sensitive data (API keys, passwords, OAuth tokens)**
+
+#### Setup AWS Profiles (Multi-Account)
+
+**~/.aws/config** (uses `[profile name]` syntax):
+
+```ini
+[default]
+region = us-east-1
+
+[profile sandbox]
+region = us-east-1
+
+[profile prod]
+region = us-east-1
+```
+
+**~/.aws/credentials** (no "profile" prefix):
+
+```ini
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+[sandbox]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+[prod]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+**Key Difference:** Config uses `[profile name]`, credentials uses `[name]`
+
+#### Common Commands
+
+```bash
+# Create secret
+aws secretsmanager create-secret \
+  --name /sandbox/my-app/api-key \
+  --secret-string "your-secret" \
+  --profile sandbox
+
+# Update secret
+aws secretsmanager update-secret \
+  --secret-id /sandbox/my-app/api-key \
+  --secret-string "new-value" \
+  --profile sandbox
+
+# Retrieve secret
+aws secretsmanager get-secret-value \
+  --secret-id /sandbox/my-app/api-key \
+  --query SecretString --output text \
+  --profile sandbox
+
+# List secrets
+aws secretsmanager list-secrets \
+  --filters Key=name,Values=/sandbox/ \
+  --profile sandbox
+
+# Delete secret
+aws secretsmanager delete-secret \
+  --secret-id /sandbox/my-app/api-key \
+  --force-delete-without-recovery \
+  --profile sandbox
+```
+
+**JSON Secrets:**
+
+```bash
+aws secretsmanager create-secret \
+  --name /sandbox/my-app/config \
+  --secret-string '{"api_key":"xxx","db_pass":"yyy"}' \
+  --profile sandbox
+```
+
+#### Grant Lambda Access
+
+In `template.yaml`:
 
 ```yaml
-Events:
-  HelloPath:
-    Type: Api
-    Properties:
-      Path: /hello
-      Method: GET
-      Auth:
-        Authorizer: AWS_IAM  # Add this line
+HelloWorldFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Policies:
+      - AWSSecretsManagerGetSecretValuePolicy:
+          SecretArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${Environment}/my-app/*'
+    Environment:
+      Variables:
+        API_KEY_SECRET: !Sub '/${Environment}/my-app/api-key'
 ```
 
-#### Required IAM Policy
+#### Use in Lambda
 
-Clients need an IAM policy attached to their user/role:
+Create `src/services/secrets.py`:
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "execute-api:Invoke",
-      "Resource": "arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/STAGE/METHOD/PATH"
-    }
-  ]
-}
-```
-
-**Examples:**
-```
-All endpoints:     arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/*
-Specific endpoint: arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/GET/hello
-Users paths:       arn:aws:execute-api:us-east-1:123456789012:abc123xyz/Prod/*/users/*
-```
-
-#### Calling IAM-Protected APIs
-
-**Using the included helper script (Recommended):**
-```bash
-# Install the required package first
-pipenv install
-
-# Call API using Makefile (automatically fetches API URL)
-make invoke-dev                          # Calls /hello on dev
-make invoke-dev ENDPOINT=/health         # Calls /health on dev
-make invoke-dev ENDPOINT=/users/123      # Calls /users/123 on dev
-
-# Or call directly with Python script (GET is default)
-python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/hello
-python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users/123
-
-# POST with JSON body (use --method and --data flags)
-python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users \
-  --method POST --data '{"name":"John","email":"john@example.com"}'
-
-# Short flags work too
-python scripts/call_api.py https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/users \
-  -m POST -d '{"name":"John","email":"john@example.com"}'
-
-# Get full help
-python scripts/call_api.py --help
-```
-
-**From your own Python code:**
 ```python
-from requests_aws4auth import AWS4Auth
-import requests
+"""AWS Secrets Manager helper."""
+import json
+from functools import lru_cache
 import boto3
 
-# Get AWS credentials
-session = boto3.Session()
-credentials = session.get_credentials()
+secrets_client = boto3.client('secretsmanager')
 
-# Create AWS SigV4 auth
-auth = AWS4Auth(
-    credentials.access_key,
-    credentials.secret_key,
-    'us-east-1',
-    'execute-api',
-    session_token=credentials.token
-)
-
-# Make request
-api_url = 'https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/Prod/hello'
-response = requests.get(api_url, auth=auth)
+@lru_cache(maxsize=128)
+def get_secret(secret_name: str):
+    """Retrieve and cache secret from AWS Secrets Manager."""
+    response = secrets_client.get_secret_value(SecretId=secret_name)
+    try:
+        return json.loads(response['SecretString'])
+    except json.JSONDecodeError:
+        return response['SecretString']
 ```
 
-**From AWS CLI:**
-```bash
-aws apigatewayv2 invoke \
-  --api-id abc123xyz \
-  --stage Prod \
-  --path /hello \
-  output.json
-```
+Use in `src/app.py`:
 
-**From Another Lambda:**
 ```python
-# The Lambda execution role needs execute-api:Invoke permission
-from aws_requests_auth.aws_auth import AWSRequestsAuth
-import requests
 import os
+from services.secrets import get_secret
 
-auth = AWSRequestsAuth(
-    aws_access_key=os.environ['AWS_ACCESS_KEY_ID'],
-    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-    aws_token=os.environ['AWS_SESSION_TOKEN'],
-    aws_host='abc123xyz.execute-api.us-east-1.amazonaws.com',
-    aws_region='us-east-1',
-    aws_service='execute-api'
-)
+# Load at cold start (cached)
+api_key = get_secret(os.environ['API_KEY_SECRET'])
 
-response = requests.get('https://...', auth=auth)
+@app.get("/hello")
+def hello():
+    # Use api_key
+    return {"message": "Hello"}
 ```
 
-### Other Authorization Options
+### 4. AWS Parameter Store
 
-See `template.yaml` (lines 59-116) for detailed examples of:
-- **Option 2:** Lambda Authorizer (Custom JWT/OAuth validation)
-- **Option 3:** API Keys (Simple rate limiting)
-- **Option 4:** Cognito User Pools (AWS managed user auth)
+**For non-sensitive config (cheaper than Secrets Manager)**
+
+Same commands as Secrets Manager, replace `secretsmanager` with `ssm`:
+
+```bash
+# Create parameter
+aws ssm put-parameter \
+  --name /sandbox/my-app/api-endpoint \
+  --value "https://api.example.com" \
+  --type String \
+  --profile sandbox
+
+# Create encrypted parameter
+aws ssm put-parameter \
+  --name /sandbox/my-app/api-key \
+  --value "secret-value" \
+  --type SecureString \
+  --profile sandbox
+
+# Get parameter
+aws ssm get-parameter \
+  --name /sandbox/my-app/api-endpoint \
+  --with-decryption \
+  --query Parameter.Value --output text \
+  --profile sandbox
+
+# Get all parameters in path
+aws ssm get-parameters-by-path \
+  --path /sandbox/my-app/ \
+  --with-decryption \
+  --profile sandbox
+```
+
+#### Lambda Access
+
+```yaml
+HelloWorldFunction:
+  Properties:
+    Policies:
+      - SSMParameterReadPolicy:
+          ParameterName: !Sub '${Environment}/my-app/*'
+```
+
+Create `src/services/parameters.py`:
+
+```python
+"""Parameter Store helper."""
+from functools import lru_cache
+import boto3
+
+ssm_client = boto3.client('ssm')
+
+@lru_cache(maxsize=128)
+def get_parameter(name: str, decrypt: bool = True) -> str:
+    """Retrieve and cache parameter."""
+    response = ssm_client.get_parameter(Name=name, WithDecryption=decrypt)
+    return response['Parameter']['Value']
+```
+
+### Comparison: Secrets Manager vs Parameter Store
+
+| Feature | Secrets Manager | Parameter Store |
+|---------|----------------|-----------------|
+| **Cost** | $0.40/secret/month | **Free** (Standard) |
+| **Rotation** | Automatic | Manual |
+| **Size Limit** | 65KB | 4KB (Standard) |
+| **Best For** | Passwords, API keys | URLs, config values |
+
+### Best Practices
+
+1. **Naming:** Use `/{environment}/{app}/{purpose}` format
+2. **Profiles:** Always use `--profile` flag for multi-account
+3. **Caching:** Use `@lru_cache` to avoid repeated API calls
+4. **Load Early:** Fetch secrets at Lambda cold start
+5. **Verify Account:** Run `aws sts get-caller-identity --profile prod` before changes
+
+---
+
+## Development Workflow
+
+### Common Commands
+
+```bash
+make help              # Show all commands
+make lint              # Run linters (black, isort, flake8)
+make test              # Run tests with coverage
+make build             # Build Lambda in Docker
+make start             # Start local API Gateway
+```
+
+### Local API Testing
+
+```bash
+# Start local API
+make start
+
+# Test endpoints
+curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:3000/hello
+curl -X POST http://127.0.0.1:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John","email":"john@example.com","age":30}'
+```
+
+### Available Endpoints
+
+- `GET /health` - Health check
+- `GET /hello` - Hello world example
+- `GET /users/{id}` - Get user by ID
+- `POST /users` - Create user
+- `GET /files` - List files (S3)
+- `POST /files` - Upload file (S3)
 
 ---
 
 ## Testing
 
-### Run All Tests
-
 ```bash
+# Run all tests
 make test
-```
 
-This runs pytest with coverage reporting. Minimum coverage threshold is 75%.
-
-### Mocking AWS Services (S3, DynamoDB, etc.)
-
-This template uses **[moto](https://github.com/getmoto/moto)** for mocking AWS services in tests. This allows you to test AWS integrations locally without incurring costs or requiring real AWS resources.
-
-#### S3 Mocking Example
-
-The template includes a fully working S3 integration example in `src/services/storage.py` with comprehensive tests in `tests/test_storage.py`.
-
-**Reusable Fixtures (tests/conftest.py):**
-
-```python
-@pytest.fixture(scope="function")
-def aws_credentials() -> None:
-    """Set fake AWS credentials for moto."""
-    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
-
-@pytest.fixture(scope="function")
-def s3_client(aws_credentials):
-    """Create a mocked S3 client."""
-    with mock_aws():
-        yield boto3.client("s3", region_name="us-east-1")
-
-@pytest.fixture(scope="function")
-def mock_s3_bucket(s3_client) -> str:
-    """Create a mock S3 bucket for testing."""
-    bucket_name = "test-bucket"
-    s3_client.create_bucket(Bucket=bucket_name)
-    os.environ["DATA_BUCKET"] = bucket_name
-    return bucket_name
-```
-
-**Using in Tests:**
-
-```python
-from services.storage import get_storage_service
-
-def test_upload_file(mock_s3_bucket, s3_client):
-    """Test uploading a file to S3."""
-    service = get_storage_service()
-
-    # Upload file (mocked - no real S3 access)
-    service.upload_file(
-        file_content=b"Hello, World!",
-        key="test/file.txt",
-        content_type="text/plain"
-    )
-
-    # Verify using mocked S3 client
-    response = s3_client.get_object(Bucket=mock_s3_bucket, Key="test/file.txt")
-    assert response["Body"].read() == b"Hello, World!"
-```
-
-**Key Benefits:**
-- ✅ Fast tests (no network calls)
-- ✅ No AWS costs
-- ✅ Deterministic behavior
-- ✅ Works offline
-- ✅ Automatic cleanup after each test
-
-**Adding More AWS Service Mocks:**
-
-To mock other AWS services (DynamoDB, SQS, SNS, etc.):
-
-1. Add the service to `Pipfile`:
-   ```toml
-   moto = {extras = ["s3", "dynamodb", "sqs"], version = "*"}
-   ```
-
-2. Create fixtures in `conftest.py`:
-   ```python
-   @pytest.fixture
-   def dynamodb_table(aws_credentials):
-       with mock_aws():
-           client = boto3.client("dynamodb", region_name="us-east-1")
-           client.create_table(
-               TableName="test-table",
-               KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-               AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-               BillingMode="PAY_PER_REQUEST"
-           )
-           yield client
-   ```
-
-3. Use in your tests:
-   ```python
-   def test_dynamodb(dynamodb_table):
-       # All DynamoDB operations are mocked
-       dynamodb_table.put_item(TableName="test-table", Item={"id": {"S": "123"}})
-   ```
-
-### Run Only Failed Tests
-
-```bash
+# Run failed tests only
 make test-failed
-```
 
-### Run Specific Tests
-
-```bash
-pipenv run pytest tests/test_handler.py::test_lambda_handler -v
-```
-
-### Coverage Report
-
-Coverage reports are automatically generated when running tests. To see detailed HTML report:
-
-```bash
+# Generate HTML coverage report
 pipenv run pytest --cov=. --cov-report=html
-# Open htmlcov/index.html in your browser
 ```
+
+### Mocking AWS Services
+
+The template uses **[moto](https://github.com/getmoto/moto)** for AWS mocking.
+
+Example test with S3:
+
+```python
+def test_upload_file(mock_s3_bucket, s3_client):
+    """Test file upload (mocked - no AWS costs)."""
+    from services.storage import get_storage_service
+
+    service = get_storage_service()
+    service.upload_file(b"Hello!", key="test.txt")
+
+    # Verify using mocked client
+    response = s3_client.get_object(Bucket=mock_s3_bucket, Key="test.txt")
+    assert response["Body"].read() == b"Hello!"
+```
+
+Benefits: ✅ Fast ✅ Free ✅ Offline ✅ No AWS account needed
+
+---
 
 ## Deployment
+
+### Environment-Specific Deployments
+
+```bash
+# Sandbox (auto-confirm, DEBUG logs)
+make deploy-sandbox
+
+# Dev (auto-confirm, INFO logs)
+make deploy-dev
+
+# Production (manual confirm, WARNING logs)
+make deploy-prod
+```
 
 ### First Time Deployment
 
 ```bash
-make deploy
+make deploy  # Interactive guided deployment
 ```
 
-This will:
-1. Check your AWS credentials
-2. Build the application
-3. Guide you through deployment with prompts
-4. Create a CloudFormation stack
-5. Deploy your Lambda function and API Gateway
+### Customize Environments
 
-You'll be asked to provide:
-- Stack name (e.g., `my-lambda-api`)
-- AWS Region
-- Deployment bucket (created automatically)
-- Confirmation prompts
-
-### Subsequent Deployments
-
-After first deployment, you can use the saved configuration:
-
-```bash
-make deploy
-```
-
-Or for CI/CD (no prompts):
-
-```bash
-make deploy-ci
-```
-
-### Environment-Specific Deployments
-
-The template supports three pre-configured environments: **sandbox**, **dev**, and **prod**.
-
-Each environment has its own configuration in `samconfig.toml` with different:
-- Stack names (e.g., `aws-fastapi-template-sandbox`, `aws-fastapi-template-dev`)
-- Environment parameters (`Environment=dev`, `LogLevel=INFO`)
-- Confirmation settings (prod requires manual confirmation)
-- Optional AWS profiles and regions
-
-#### Deploy to Sandbox
-
-```bash
-make deploy-sandbox
-# Automatically confirms, uses LogLevel=DEBUG
-```
-
-#### Deploy to Dev
-
-```bash
-make deploy-dev
-# Automatically confirms, uses LogLevel=INFO
-```
-
-#### Deploy to Production
-
-```bash
-make deploy-prod
-# ⚠️ REQUIRES manual confirmation
-# Uses LogLevel=WARNING and production tags
-```
-
-#### Customize Environments
-
-Edit `samconfig.toml` to customize each environment:
+Edit `samconfig.toml`:
 
 ```toml
 [dev.deploy.parameters]
 parameter_overrides = [
-  "Environment=dev",
-  "LogLevel=INFO"
-  # Add custom parameters:
-  # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/dev-lambda-role"
+  "Environment=Dev",
+  "LogLevel=INFO",
+  "FromEmail=dev@example.com"
 ]
-# Specify AWS profile and region:
+# Target specific AWS account
+# profile = "dev"
 # region = "us-east-1"
-# profile = "dev-profile"
 ```
 
-#### Manual Deployment (Advanced)
-
-You can also deploy manually with custom config:
+### Destroy Environments
 
 ```bash
-sam build
-sam deploy --config-env sandbox --parameter-overrides "LogLevel=DEBUG"
-```
-
-### Destroying Environments
-
-When you need to tear down an environment and delete all associated AWS resources:
-
-#### Destroy Sandbox
-
-```bash
-make destroy-sandbox
-# Automatically confirms and deletes all sandbox resources
-```
-
-#### Destroy Dev
-
-```bash
-make destroy-dev
-# Automatically confirms and deletes all dev resources
-```
-
-#### Destroy Production
-
-```bash
-make destroy-prod
-# ⚠️ REQUIRES manual confirmation
-# Shows list of resources to be deleted before proceeding
-```
-
-**What gets deleted:**
-- Lambda function(s)
-- API Gateway REST API
-- CloudWatch Log Groups
-- CloudWatch Alarms
-- IAM roles (if created by SAM)
-- S3 deployment bucket (optionally, with `--s3-bucket` flag)
-
-**Manual deletion:**
-```bash
-# Delete stack and S3 bucket
-sam delete --stack-name aws-fastapi-template-dev --no-prompts --s3-bucket your-bucket-name
+make destroy-sandbox  # Auto-confirm
+make destroy-dev      # Auto-confirm
+make destroy-prod     # Manual confirm required
 ```
 
 ### View Deployed Resources
 
-After deployment, the output will show:
-- API Gateway endpoint URL
-- Lambda function ARN
-- CloudFormation stack name
+After deployment, check:
 
-You can also view resources in the AWS Console:
-- [Lambda Functions](https://console.aws.amazon.com/lambda)
-- [API Gateway](https://console.aws.amazon.com/apigateway)
-- [CloudFormation](https://console.aws.amazon.com/cloudformation)
+- API Gateway endpoint (in output)
+- [AWS Lambda Console](https://console.aws.amazon.com/lambda)
+- [API Gateway Console](https://console.aws.amazon.com/apigateway)
+- [CloudFormation Console](https://console.aws.amazon.com/cloudformation)
 
-## Code Quality Tools
-
-This project uses several tools to maintain code quality via **pre-commit hooks**:
-
-### Linters & Formatters
-
-- **black** - Opinionated code formatter (88 character line length)
-- **isort** - Import statement organizer
-- **flake8** - Style guide enforcement with complexity checks
-- **autopep8** - PEP 8 auto-formatter
-- **pyupgrade** - Automatic Python syntax modernization (3.9+)
-- **Pre-commit hooks** - YAML/JSON/TOML validation, trailing whitespace, end-of-file-fixer, etc.
-
-Run all linters:
-```bash
-make lint  # Runs pre-commit on all files
-```
-
-### Pre-commit Hooks
-
-Git hooks automatically run linters before each commit:
+### Calling IAM-Protected APIs
 
 ```bash
-# Install hooks (done automatically with make install-dev)
-make hooks
+# Using included script
+make invoke-dev ENDPOINT=/hello
+make invoke-prod ENDPOINT=/users/123
 
-# Run hooks manually
-pipenv run pre-commit run --all-files
-
-# Skip hooks (not recommended)
-git commit --no-verify
+# Direct Python script
+python scripts/call_api.py https://API_ID.execute-api.us-east-1.amazonaws.com/Prod/hello
+python scripts/call_api.py https://API_ID.execute-api.us-east-1.amazonaws.com/Prod/users \
+  -m POST -d '{"name":"John"}'
 ```
+
+---
+
+## Troubleshooting
+
+<details>
+<summary><b>AWS Credentials Not Found</b></summary>
+
+```bash
+aws configure
+# Or verify current credentials
+aws sts get-caller-identity
+```
+
+</details>
+
+<details>
+<summary><b>Docker Not Running</b></summary>
+
+Start Docker Desktop and verify with `docker ps`
+</details>
+
+<details>
+<summary><b>SAM Build Fails</b></summary>
+
+```bash
+make clean
+make build
+# Verify Docker is running
+docker ps
+```
+
+</details>
+
+<details>
+<summary><b>Import Errors in Tests</b></summary>
+
+Run tests from project root:
+
+```bash
+cd aws_fastapi_template
+make test
+```
+
+</details>
+
+<details>
+<summary><b>Pre-commit Hooks Failing</b></summary>
+
+```bash
+make lint  # See detailed errors
+pipenv run black .
+pipenv run isort .
+```
+
+</details>
+
+<details>
+<summary><b>Python Version Issues</b></summary>
+
+```bash
+python --version  # Check version
+pipenv --rm       # Remove old venv
+pipenv --python 3.13
+pipenv install --dev
+```
+
+</details>
+
+---
 
 ## Project Structure
 
 ```
 aws_fastapi_template/
-├── src/                      # Lambda function source code
-│   ├── __init__.py
-│   ├── app.py               # Routes only (clean!)
-│   ├── decorators.py        # @unified_response decorator
-│   ├── exceptions.py        # Custom exceptions + handler registration
-│   ├── models.py            # Pydantic request/response models
-│   ├── helper.py            # Business logic & domain models
-│   ├── services/            # AWS service integrations
-│   │   ├── __init__.py
-│   │   └── storage.py       # S3 storage service
-│   └── requirements.txt     # Runtime dependencies
-├── scripts/                 # Helper scripts
-│   ├── call_api.py          # IAM-authenticated API client
-│   └── README.md            # Scripts documentation
+├── src/                      # Lambda source
+│   ├── app.py               # Routes
+│   ├── decorators.py        # Response wrappers
+│   ├── exceptions.py        # Error handling
+│   ├── models.py            # Pydantic models
+│   ├── helper.py            # Business logic
+│   └── services/            # AWS integrations
+│       ├── storage.py       # S3 service
+│       ├── email.py         # SES service
+│       ├── secrets.py       # Secrets Manager helper
+│       └── parameters.py    # Parameter Store helper
 ├── tests/                   # Test files
-│   ├── __init__.py
-│   ├── conftest.py          # Shared pytest fixtures (includes AWS mocking)
-│   ├── test_handler.py      # API handler tests
-│   ├── test_storage.py      # S3 storage service tests (mocked with moto)
-│   └── fixtures/            # JSON event fixtures
-│       └── apigw_hello_event.json
-├── events/                  # Sample event payloads for local testing
-│   └── hello.json           # API Gateway event
-├── terraform/               # Infrastructure as Code (alternative to SAM)
-│   ├── main.tf              # Note: This is an alternative IaC option
-│   ├── lambda.tf            # You can use either SAM (template.yaml) OR Terraform
-│   ├── api_gateway.tf       # Both are provided for flexibility
-│   └── ... (other Terraform files)
-├── .pre-commit-config.yaml  # Pre-commit hooks config
-├── Pipfile                  # Development dependencies
-├── Pipfile.lock             # Locked dependency versions
-├── pyproject.toml           # Tool configurations (pytest, coverage)
-├── template.yaml            # SAM/CloudFormation template
-├── samconfig.toml           # SAM deployment config (multi-environment)
-├── makefile                 # Build automation (deploy, test, invoke, etc.)
-├── env.json.example         # Local environment variables template
-├── README.md                # Project overview & quick start
-└── DEVELOPMENT.md           # This file (detailed setup guide)
+│   ├── conftest.py          # Fixtures (AWS mocking)
+│   ├── test_handler.py      # API tests
+│   └── test_storage.py      # S3 tests
+├── scripts/                 # Utility scripts
+│   └── call_api.py          # IAM-authenticated API caller
+├── events/                  # Sample events
+├── template.yaml            # SAM/CloudFormation
+├── samconfig.toml           # Multi-environment config
+├── makefile                 # Build automation
+└── env.json.example         # Local env template
 ```
 
-## Troubleshooting
+---
 
-### Python Version Issues
-
-**Problem:** Wrong Python version being used
-
-**Solution:**
-```bash
-# Check your Python version
-python --version
-
-# On Mac/Linux, you may need to specify python3.13
-python3.13 --version
-
-# Recreate virtual environment with correct version
-pipenv --rm
-pipenv --python 3.13
-pipenv install --dev
-```
-
-### Docker Not Running
-
-**Problem:** `Cannot connect to Docker daemon`
-
-**Solution:**
-- Start Docker Desktop
-- Wait for it to fully initialize
-- Run `docker ps` to verify it's working
-
-### AWS Credentials Not Found
-
-**Problem:** `Unable to locate credentials`
-
-**Solution:**
-```bash
-# Configure AWS credentials
-aws configure
-
-# Or set environment variables
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_DEFAULT_REGION=us-east-1
-
-# Verify credentials
-make aws-check
-```
-
-### SAM Build Fails
-
-**Problem:** Build errors or dependency issues
-
-**Solution:**
-```bash
-# Clean and rebuild
-make clean
-make build
-
-# Check Docker is running
-docker ps
-
-# Verify src/requirements.txt exists and is correct
-cat src/requirements.txt
-```
-
-### Import Errors in Tests
-
-**Problem:** `ModuleNotFoundError: No module named 'src'`
-
-**Solution:**
-The project is configured with `pythonpath = "."` in `pyproject.toml`. Ensure you're running tests from the project root:
+## Code Quality
 
 ```bash
-# Run from project root
-cd aws_fastapi_template
-make test
+make lint  # Run all linters
 ```
 
-### Pre-commit Hooks Failing
+**Configured tools:**
 
-**Problem:** Hooks fail on commit
+- black (formatter)
+- isort (import organizer)
+- flake8 (style guide)
+- autopep8 (PEP 8 auto-fix)
+- pyupgrade (syntax modernization)
+- pre-commit hooks (auto-run on commit)
 
-**Solution:**
-```bash
-# Run hooks manually to see detailed errors
-make lint
-
-# Auto-fix many issues
-pipenv run black .
-pipenv run isort .
-pipenv run autopep8 -r -i .
-
-# Then commit again
-git add .
-git commit -m "Your message"
-```
-
-### Windows Make Issues
-
-**Problem:** `make: command not found`
-
-**Solution:**
-```powershell
-# Install make via Chocolatey
-choco install make
-
-# Or use WSL (Windows Subsystem for Linux)
-wsl --install
-
-# Or run commands directly
-pipenv run pytest
-sam build
-```
+---
 
 ## CI/CD with GitHub Actions
 
-This project is ready for automated deployment using GitHub Actions. Here's how to set it up:
+<details>
+<summary><b>Setup Instructions</b></summary>
 
-### Setting Up GitHub Actions
+1. Create `.github/workflows/deploy.yml`
+2. Add GitHub secrets:
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_REGION`
+   - `AWS_STACK_NAME`
 
-1. **Create the workflow directory:**
-   ```bash
-   mkdir -p .github/workflows
-   ```
-
-2. **Create `.github/workflows/deploy.yml`:**
-
-```yaml
-name: Deploy to AWS
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
-        run: |
-          pip install pipenv
-          pipenv install --dev
-
-      - name: Run linters
-        run: |
-          pipenv run pre-commit run --all-files
-
-      - name: Run tests
-        run: |
-          pipenv run pytest --cov=. --cov-report=xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage.xml
-          fail_ci_if_error: true
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Set up AWS SAM
-        uses: aws-actions/setup-sam@v2
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Build SAM application
-        run: sam build --use-container
-
-      - name: Deploy SAM application
-        run: |
-          sam deploy \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset \
-            --stack-name ${{ secrets.AWS_STACK_NAME }} \
-            --capabilities CAPABILITY_IAM \
-            --region ${{ secrets.AWS_REGION }}
-```
-
-### GitHub Secrets Configuration
-
-Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
-
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `AWS_ACCESS_KEY_ID` | AWS access key for deployment | `AKIAIOSFODNN7EXAMPLE` |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret access key | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
-| `AWS_REGION` | AWS region to deploy to | `us-east-1` |
-| `AWS_STACK_NAME` | CloudFormation stack name | `my-lambda-api` |
-
-**Security Best Practice:** Use OIDC authentication instead of long-lived credentials. See [Using OIDC with GitHub Actions](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html).
-
-### Advanced: Using OIDC (Recommended)
-
-OIDC is more secure than storing AWS credentials:
+**Better:** Use OIDC (no long-lived credentials):
 
 ```yaml
-- name: Configure AWS credentials
-  uses: aws-actions/configure-aws-credentials@v4
+- uses: aws-actions/configure-aws-credentials@v4
   with:
-    role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsRole
-    role-session-name: GitHubActionsSession
+    role-to-assume: arn:aws:iam::ACCOUNT:role/GitHubActionsRole
     aws-region: us-east-1
 ```
 
-To set up OIDC:
+See [AWS OIDC Guide](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html)
+</details>
 
-1. **Create an OIDC provider in AWS IAM:**
-   - Provider URL: `https://token.actions.githubusercontent.com`
-   - Audience: `sts.amazonaws.com`
+---
 
-2. **Create an IAM role** with trust policy:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main"
-        }
-      }
-    }
-  ]
-}
-```
-
-### Workflow Features
-
-The provided workflow:
-
-- ✅ **Runs tests on PRs** - Ensures code quality before merging
-- ✅ **Lints code** - Runs pre-commit hooks automatically
-- ✅ **Code coverage** - Uploads coverage reports to Codecov
-- ✅ **Auto-deploys on main** - Deploys only after tests pass
-- ✅ **Uses containers** - Builds Lambda in Docker for consistency
-
-### Environment-Specific Deployments
-
-For multiple environments (dev, staging, prod):
-
-```yaml
-deploy-dev:
-  runs-on: ubuntu-latest
-  needs: test
-  if: github.ref == 'refs/heads/develop'
-  environment: development
-  steps:
-    # ... same as above but with dev stack name
-
-deploy-prod:
-  runs-on: ubuntu-latest
-  needs: test
-  if: github.ref == 'refs/heads/main'
-  environment: production
-  steps:
-    # ... same as above but with prod stack name
-```
-
-### Local Testing of GitHub Actions
-
-Test your workflow locally with [act](https://github.com/nektos/act):
-
-```bash
-# Install act
-choco install act-cli  # Windows
-brew install act       # macOS
-
-# Run the workflow locally
-act push
-
-# Run specific job
-act -j test
-```
-
-### Additional Resources
+## Additional Resources
 
 - [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
-- [GitHub Actions for AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/deploying-using-github.html)
-- [AWS Lambda Powertools Python](https://awslabs.github.io/aws-lambda-powertools-python/)
-- [Pipenv Documentation](https://pipenv.pypa.io/)
-- [Black Code Style](https://black.readthedocs.io/)
+- [AWS Lambda Powertools](https://awslabs.github.io/aws-lambda-powertools-python/)
+- [Pydantic Documentation](https://docs.pydantic.dev/)
 - [Pytest Documentation](https://docs.pytest.org/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+
+---
 
 ## Getting Help
 
-If you encounter issues not covered in this guide:
-
-1. Check the [AWS SAM CLI Issues](https://github.com/aws/aws-sam-cli/issues)
-2. Review [AWS Lambda Documentation](https://docs.aws.amazon.com/lambda/)
+1. Check [AWS SAM CLI Issues](https://github.com/aws/aws-sam-cli/issues)
+2. Review [AWS Lambda Docs](https://docs.aws.amazon.com/lambda/)
 3. Open an issue in this repository
 
-## Contributing
+---
 
-1. Create a feature branch
-2. Make your changes
-3. Run `make lint` and `make test`
-4. Commit your changes (pre-commit hooks will run)
-5. Push and create a pull request
-
-Happy coding! 🚀
+**Happy coding! 🚀**

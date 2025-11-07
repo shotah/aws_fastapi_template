@@ -10,7 +10,8 @@
     }
   },
   "[markdown]": {
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
   },
   "[makefile]": {
     "editor.formatOnSave": false,
@@ -36,6 +37,7 @@
   "isort.check": true,
   "cSpell.words": [
     "addopts",
+    "AKIAIOSFODNN",
     "apigw",
     "asciidoc",
     "autopep",
@@ -49,6 +51,7 @@
     "exitfirst",
     "FASTAPI",
     "flake",
+    "functools",
     "getenv",
     "htmlcov",
     "ipynb",
