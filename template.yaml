@@ -46,6 +46,23 @@ Parameters:
     Description: Admin email address to receive scheduled emails
     Default: "admin@example.com"
 
+  # Custom Domain Configuration (Optional)
+  # Stack name is automatically prepended to avoid collisions across services/stacks
+  # Final domain will be: ${AWS::StackName}.${BaseDomain}
+  BaseDomain:
+    Type: String
+    Description: Base domain for API (e.g., example.com). Stack name will be prepended. Leave empty to skip custom domain.
+    Default: ""
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for base domain. Required if BaseDomain is set.
+    Default: ""
+
+Conditions:
+  # Condition to check if custom domain should be configured
+  HasCustomDomain: !Not [!Equals [!Ref BaseDomain, ""]]
+
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
     Timeout: 150
@@ -68,15 +85,51 @@ Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/devel
 
 Resources:
   # ============================================================================
+  # ACM Certificate (Auto-created and validated via Route53)
+  # ============================================================================
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Sub "${AWS::StackName}.${BaseDomain}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "${AWS::StackName}.${BaseDomain}"
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-api-cert"
+        - Key: ManagedBy
+          Value: SAM
+
+  # ============================================================================
   # API Gateway (Explicit Definition)
   # ============================================================================
   # We define the API explicitly to control the stage name per environment
+  # Custom domain is automatically configured if DomainName parameter is provided
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub "${AWS::StackName}-api"
       StageName: !Ref Environment # Use Environment as the stage name
       TracingEnabled: true
+      # Custom domain configuration (only applies if BaseDomain parameter is set)
+      # Final domain will be: ${AWS::StackName}.${BaseDomain}
+      Domain:
+        DomainName:
+          !If [
+            HasCustomDomain,
+            !Sub "${AWS::StackName}.${BaseDomain}",
+            !Ref "AWS::NoValue",
+          ]
+        CertificateArn:
+          !If [HasCustomDomain, !Ref ApiCertificate, !Ref "AWS::NoValue"]
+        EndpointConfiguration: REGIONAL # REGIONAL is faster and cheaper than EDGE
+        Route53:
+          HostedZoneId:
+            !If [HasCustomDomain, !Ref HostedZoneId, !Ref "AWS::NoValue"]
       Tags:
         Environment: !Ref Environment
         CostCenter: engineering
@@ -580,6 +633,26 @@ Outputs:
     Value: !Ref DataBucket
     Export:
       Name: !Sub "${AWS::StackName}-DataBucketName"
+
+  # ============================================================================
+  # Custom Domain Outputs
+  # ============================================================================
+  CustomDomainName:
+    Condition: HasCustomDomain
+    Description: Custom domain name for the API (stack-namespaced)
+    Value: !Sub "${AWS::StackName}.${BaseDomain}"
+
+  CustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Full URL for the custom domain
+    Value: !Sub "https://${AWS::StackName}.${BaseDomain}/"
+
+  CertificateArn:
+    Condition: HasCustomDomain
+    Description: ARN of the auto-generated ACM certificate
+    Value: !Ref ApiCertificate
+    Export:
+      Name: !Sub "${AWS::StackName}-CertificateArn"
 
   # ============================================================================
   # S3 Outputs (Commented Examples)
