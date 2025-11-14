@@ -1,11 +1,13 @@
 """Services package for AWS integrations and business logic."""
 
-from .email import EmailService, get_email_service
-from .storage import StorageService, get_storage_service
+from .dynamodb import DynamoDBService
+from .email import EmailService
+from .sqs import SQSService
+from .storage import StorageService
 
 __all__ = [
+    "DynamoDBService",
     "EmailService",
-    "get_email_service",
+    "SQSService",
     "StorageService",
-    "get_storage_service",
 ]

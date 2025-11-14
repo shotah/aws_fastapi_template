@@ -13,9 +13,26 @@ from botocore.exceptions import ClientError  # type: ignore
 
 logger = Logger(child=True)
 
+# Module-level storage for email sender connections (singleton pattern)
+_sender_connections: dict[str, "EmailService"] = {}
+
 
 class EmailService:
-    """Service class for SES email operations."""
+    """Service class for SES email operations.
+
+    Manages SES email configurations. Automatically caches connections
+    per sender email to optimize Lambda cold starts and resource usage.
+
+    Usage:
+        # Automatically returns singleton per sender
+        email = EmailService("support@example.com")
+        same_email = EmailService("support@example.com")  # Returns same instance
+        assert email is same_email
+
+        # Different sender = different instance
+        noreply = EmailService("noreply@example.com")
+        assert email is not noreply
+    """
 
     # Base HTML email template
     BASE_EMAIL_TEMPLATE = """
@@ -72,18 +89,45 @@ class EmailService:
     </html>
     """
 
+    def __new__(cls, from_email: Optional[str] = None, region_name: Optional[str] = None):
+        """
+        Control instance creation to implement singleton pattern per sender.
+
+        Returns existing instance if sender connection already exists.
+        Note: region_name is not part of the cache key (first connection wins).
+        """
+        # Resolve from_email
+        resolved_email = from_email or os.getenv("FROM_EMAIL")
+        if not resolved_email:
+            raise ValueError("From email must be provided or FROM_EMAIL env var must be set")
+
+        # Return existing connection if it exists
+        if resolved_email in _sender_connections:
+            return _sender_connections[resolved_email]
+
+        # Create new instance and cache it
+        instance = super().__new__(cls)
+        _sender_connections[resolved_email] = instance
+        return instance
+
     def __init__(self, from_email: Optional[str] = None, region_name: Optional[str] = None):
         """
         Initialize the email service.
+
+        Note: Due to singleton pattern, __init__ may be called multiple times
+        on the same instance. We guard against re-initialization.
 
         Args:
             from_email: Verified sender email address. If not provided, reads from
                        FROM_EMAIL environment variable.
             region_name: AWS region name. If not provided, uses default.
         """
+        # Only initialize once (singleton may call __init__ multiple times)
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
+
         self.from_email = from_email or os.getenv("FROM_EMAIL")
-        if not self.from_email:
-            raise ValueError("From email must be provided or FROM_EMAIL env var must be set")
 
         # Initialize SES client
         client_kwargs = {}
@@ -92,6 +136,38 @@ class EmailService:
         self.ses_client = boto3.client("ses", **client_kwargs)
 
         logger.info(f"EmailService initialized with sender: {self.from_email}")
+
+    @classmethod
+    def clear_connections(cls) -> None:
+        """
+        Clear all cached email sender connections.
+
+        Useful for testing or when you need to force reconnection.
+
+        Example:
+            # In test teardown
+            EmailService.clear_connections()
+        """
+        _sender_connections.clear()
+        logger.info("Cleared all email sender connections")
+
+    @classmethod
+    def clear_connection(cls, from_email: str) -> None:
+        """
+        Clear a specific sender connection.
+
+        Args:
+            from_email: Email address of the sender connection to clear
+
+        Example:
+            EmailService.clear_connection("support@example.com")
+        """
+        if from_email in _sender_connections:
+            # Remove the _initialized flag before deleting so it can be recreated fresh
+            if hasattr(_sender_connections[from_email], "_initialized"):
+                delattr(_sender_connections[from_email], "_initialized")
+            del _sender_connections[from_email]
+            logger.info(f"Cleared email sender connection for: {from_email}")
 
     def send_email(
         self,
@@ -258,20 +334,3 @@ class EmailService:
             title=title,
             body_content=report_content,
         )
-
-
-# Singleton instance for reuse
-_email_service: Optional[EmailService] = None
-
-
-def get_email_service() -> EmailService:
-    """
-    Get or create a singleton EmailService instance.
-
-    Returns:
-        EmailService instance
-    """
-    global _email_service
-    if _email_service is None:
-        _email_service = EmailService()
-    return _email_service

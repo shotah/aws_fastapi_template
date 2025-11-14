@@ -13,23 +13,98 @@ from botocore.exceptions import ClientError  # type: ignore
 
 logger = Logger(child=True)
 
+# Module-level storage for bucket connections (singleton pattern)
+_bucket_connections: dict[str, "StorageService"] = {}
+
 
 class StorageService:
-    """Service class for S3 storage operations."""
+    """Service class for S3 storage operations.
+
+    Manages connections to S3 buckets. Automatically caches connections
+    per bucket name to optimize Lambda cold starts and resource usage.
+
+    Usage:
+        # Automatically returns singleton per bucket
+        storage = StorageService("data-bucket")
+        same_storage = StorageService("data-bucket")  # Returns same instance
+        assert storage is same_storage
+
+        # Different bucket = different instance
+        uploads = StorageService("uploads-bucket")
+        assert storage is not uploads
+    """
+
+    def __new__(cls, bucket_name: Optional[str] = None):
+        """
+        Control instance creation to implement singleton pattern per bucket.
+
+        Returns existing instance if bucket connection already exists.
+        """
+        # Resolve bucket name
+        resolved_name = bucket_name or os.getenv("DATA_BUCKET")
+        if not resolved_name:
+            raise ValueError("Bucket name must be provided or DATA_BUCKET env var must be set")
+
+        # Return existing connection if it exists
+        if resolved_name in _bucket_connections:
+            return _bucket_connections[resolved_name]
+
+        # Create new instance and cache it
+        instance = super().__new__(cls)
+        _bucket_connections[resolved_name] = instance
+        return instance
 
     def __init__(self, bucket_name: Optional[str] = None):
         """
-        Initialize the storage service.
+        Initialize the storage service for a specific bucket.
+
+        Note: Due to singleton pattern, __init__ may be called multiple times
+        on the same instance. We guard against re-initialization.
 
         Args:
             bucket_name: S3 bucket name. If not provided, reads from
                         DATA_BUCKET environment variable.
         """
+        # Only initialize once (singleton may call __init__ multiple times)
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
+
         self.bucket_name = bucket_name or os.getenv("DATA_BUCKET")
-        if not self.bucket_name:
-            raise ValueError("Bucket name must be provided or DATA_BUCKET env var must be set")
         self.s3_client = boto3.client("s3")
         logger.info(f"StorageService initialized with bucket: {self.bucket_name}")
+
+    @classmethod
+    def clear_connections(cls) -> None:
+        """
+        Clear all cached bucket connections.
+
+        Useful for testing or when you need to force reconnection.
+
+        Example:
+            # In test teardown
+            StorageService.clear_connections()
+        """
+        _bucket_connections.clear()
+        logger.info("Cleared all S3 bucket connections")
+
+    @classmethod
+    def clear_connection(cls, bucket_name: str) -> None:
+        """
+        Clear a specific bucket connection.
+
+        Args:
+            bucket_name: Name of the bucket connection to clear
+
+        Example:
+            StorageService.clear_connection("data-bucket")
+        """
+        if bucket_name in _bucket_connections:
+            # Remove the _initialized flag before deleting so it can be recreated fresh
+            if hasattr(_bucket_connections[bucket_name], "_initialized"):
+                delattr(_bucket_connections[bucket_name], "_initialized")
+            del _bucket_connections[bucket_name]
+            logger.info(f"Cleared S3 connection for bucket: {bucket_name}")
 
     def upload_file(
         self,
@@ -194,20 +269,3 @@ class StorageService:
         except ClientError as e:
             logger.error(f"Failed to generate presigned URL: {e}")
             raise
-
-
-# Singleton instance for reuse
-_storage_service: Optional[StorageService] = None
-
-
-def get_storage_service() -> StorageService:
-    """
-    Get or create a singleton StorageService instance.
-
-    Returns:
-        StorageService instance
-    """
-    global _storage_service
-    if _storage_service is None:
-        _storage_service = StorageService()
-    return _storage_service

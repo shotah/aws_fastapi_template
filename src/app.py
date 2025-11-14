@@ -19,8 +19,8 @@ from models import (
     UserCreateResponse,
     UserResponse,
 )
-from services.email import get_email_service  # type: ignore
-from services.storage import get_storage_service  # type: ignore
+from services.email import EmailService  # type: ignore
+from services.storage import StorageService  # type: ignore
 
 app = APIGatewayRestResolver(enable_validation=True)
 tracer = Tracer()
@@ -225,7 +225,7 @@ def upload_file(upload_request: FileUploadRequest) -> dict[str, Any]:
         file_id = f"uploads/{uuid.uuid4()}/{upload_request.file_name}"
 
         # Upload to S3
-        storage = get_storage_service()
+        storage = StorageService()
         storage.upload_file(
             file_content=file_content,
             key=file_id,
@@ -266,7 +266,7 @@ def download_file(file_id: str) -> dict[str, Any]:
     metrics.add_metric(name="FileDownloads", unit=MetricUnit.Count, value=1)
 
     try:
-        storage = get_storage_service()
+        storage = StorageService()
 
         # Check if file exists
         if not storage.file_exists(file_id):
@@ -311,7 +311,7 @@ def list_files() -> dict[str, Any]:
         # Get optional prefix from query parameters
         prefix = app.current_event.get_query_string_value("prefix", default_value="")
 
-        storage = get_storage_service()
+        storage = StorageService()
         files = storage.list_files(prefix=prefix)
 
         logger.info(f"Listed {len(files)} files", extra={"prefix": prefix})
@@ -340,7 +340,7 @@ def delete_file(file_id: str) -> dict[str, Any]:
     metrics.add_metric(name="FileDeletions", unit=MetricUnit.Count, value=1)
 
     try:
-        storage = get_storage_service()
+        storage = StorageService()
 
         # Check if file exists
         if not storage.file_exists(file_id):
@@ -394,7 +394,7 @@ def trigger_nightly_email() -> dict[str, Any]:
     admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
 
     # Get email service and send daily report
-    email_service = get_email_service()
+    email_service = EmailService()
 
     # Optional: Customize report content here
     # custom_content = "<h2>Custom Report</h2><p>Your data here</p>"

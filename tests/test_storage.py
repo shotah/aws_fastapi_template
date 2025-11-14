@@ -7,7 +7,7 @@ without requiring real AWS resources.
 import pytest
 from botocore.exceptions import ClientError
 
-from services.storage import StorageService, get_storage_service
+from services.storage import StorageService
 
 
 class TestStorageService:
@@ -182,28 +182,73 @@ class TestStorageService:
 
 
 class TestStorageServiceSingleton:
-    """Tests for the get_storage_service singleton function."""
+    """Tests for the Storage service singleton pattern."""
 
-    def test_get_storage_service_returns_instance(self, mock_s3_bucket):
-        """Test that get_storage_service returns a StorageService instance."""
-        service = get_storage_service()
+    def test_direct_instantiation_returns_instance(self, mock_s3_bucket):
+        """Test that direct instantiation returns a StorageService instance."""
+        service = StorageService()
         assert isinstance(service, StorageService)
         assert service.bucket_name == mock_s3_bucket
 
-    def test_get_storage_service_singleton(self, mock_s3_bucket):
-        """Test that get_storage_service returns the same instance."""
-        service1 = get_storage_service()
-        service2 = get_storage_service()
+    def test_direct_instantiation_singleton(self, mock_s3_bucket):
+        """Test that direct instantiation returns the same instance."""
+        service1 = StorageService()
+        service2 = StorageService()
 
         # Should be the same instance (singleton)
         assert service1 is service2
 
-    def test_get_storage_service_fresh_instance(self, mock_s3_bucket):
+    def test_fresh_instance_after_clear(self, mock_s3_bucket):
         """Test creating a fresh instance after clearing singleton."""
-        from services import storage
+        # Clear the singleton using class method
+        StorageService.clear_connections()
 
-        # Clear the singleton
-        storage._storage_service = None
-
-        service = get_storage_service()
+        service = StorageService()
         assert isinstance(service, StorageService)
+
+    def test_clear_specific_bucket_connection(self, mock_s3_bucket):
+        """Test clearing a specific bucket connection."""
+        # Get connection
+        service1 = StorageService(mock_s3_bucket)
+
+        # Clear specific connection
+        StorageService.clear_connection(mock_s3_bucket)
+
+        # Getting again should create new instance
+        service2 = StorageService(mock_s3_bucket)
+
+        # Should be different instances
+        assert service1 is not service2
+
+    def test_multiple_bucket_connections(self, s3_client, mock_s3_bucket):
+        """Test managing connections to multiple buckets."""
+        # Create a second bucket
+        second_bucket = "test-bucket-2"
+        s3_client.create_bucket(Bucket=second_bucket)
+
+        # Get connections to both buckets - just instantiate directly!
+        service1 = StorageService(mock_s3_bucket)
+        service2 = StorageService(second_bucket)
+
+        # Should be different instances
+        assert service1 is not service2
+        assert service1.bucket_name == mock_s3_bucket
+        assert service2.bucket_name == second_bucket
+
+        # Test operations on both
+        service1.upload_file(b"bucket1", "file1.txt")
+        service2.upload_file(b"bucket2", "file2.txt")
+
+        content1 = service1.download_file("file1.txt")
+        content2 = service2.download_file("file2.txt")
+
+        assert content1 == b"bucket1"
+        assert content2 == b"bucket2"
+
+    def test_singleton_behavior(self, mock_s3_bucket):
+        """Test that instantiating with same bucket returns same instance."""
+        service1 = StorageService(mock_s3_bucket)
+        service2 = StorageService(mock_s3_bucket)
+
+        # Should be the same instance
+        assert service1 is service2

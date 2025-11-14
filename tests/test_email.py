@@ -9,7 +9,7 @@ import os
 import pytest
 from botocore.exceptions import ClientError
 
-from services.email import EmailService, get_email_service
+from services.email import EmailService
 
 
 class TestEmailService:
@@ -202,31 +202,81 @@ class TestEmailService:
 
 
 class TestEmailServiceSingleton:
-    """Tests for the get_email_service singleton function."""
+    """Tests for the Email service singleton pattern."""
 
-    def test_get_email_service_returns_instance(self, mock_verified_email):
-        """Test that get_email_service returns an EmailService instance."""
-        service = get_email_service()
+    def test_direct_instantiation_returns_instance(self, mock_verified_email):
+        """Test that direct instantiation returns an EmailService instance."""
+        service = EmailService()
         assert isinstance(service, EmailService)
         assert service.from_email == mock_verified_email
 
-    def test_get_email_service_singleton(self, mock_verified_email):
-        """Test that get_email_service returns the same instance."""
-        service1 = get_email_service()
-        service2 = get_email_service()
+    def test_direct_instantiation_singleton(self, mock_verified_email):
+        """Test that direct instantiation returns the same instance."""
+        service1 = EmailService()
+        service2 = EmailService()
 
         # Should be the same instance (singleton)
         assert service1 is service2
 
-    def test_get_email_service_fresh_instance(self, mock_verified_email):
+    def test_fresh_instance_after_clear(self, mock_verified_email):
         """Test creating a fresh instance after clearing singleton."""
-        from services import email
+        # Clear the singleton using class method
+        EmailService.clear_connections()
 
-        # Clear the singleton
-        email._email_service = None
-
-        service = get_email_service()
+        service = EmailService()
         assert isinstance(service, EmailService)
+
+    def test_clear_specific_sender_connection(self, mock_verified_email):
+        """Test clearing a specific sender connection."""
+        # Get connection
+        service1 = EmailService(mock_verified_email)
+
+        # Clear specific connection
+        EmailService.clear_connection(mock_verified_email)
+
+        # Getting again should create new instance
+        service2 = EmailService(mock_verified_email)
+
+        # Should be different instances
+        assert service1 is not service2
+
+    def test_multiple_sender_connections(self, ses_client, mock_verified_email):
+        """Test managing connections for multiple senders."""
+        # Verify a second email
+        second_email = "noreply@example.com"
+        ses_client.verify_email_identity(EmailAddress=second_email)
+
+        # Get connections for both senders - just instantiate directly!
+        service1 = EmailService(mock_verified_email)
+        service2 = EmailService(second_email)
+
+        # Should be different instances
+        assert service1 is not service2
+        assert service1.from_email == mock_verified_email
+        assert service2.from_email == second_email
+
+        # Both should be able to send
+        msg_id1 = service1.send_email(
+            to_addresses=["test@example.com"],
+            subject="From sender 1",
+            body_html="<p>Test</p>",
+        )
+        msg_id2 = service2.send_email(
+            to_addresses=["test@example.com"],
+            subject="From sender 2",
+            body_html="<p>Test</p>",
+        )
+
+        assert msg_id1 is not None
+        assert msg_id2 is not None
+
+    def test_singleton_behavior(self, mock_verified_email):
+        """Test that instantiating with same email returns same instance."""
+        service1 = EmailService(mock_verified_email)
+        service2 = EmailService(mock_verified_email)
+
+        # Should be the same instance
+        assert service1 is service2
 
 
 class TestEmailServiceErrorHandling:

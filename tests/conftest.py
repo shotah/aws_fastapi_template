@@ -115,7 +115,7 @@ def mock_s3_bucket(s3_client) -> str:
         def test_storage(mock_s3_bucket):
             # StorageService will use "test-bucket"
             # All S3 operations are mocked
-            storage = get_storage_service()
+            storage = StorageService()
             storage.upload_file(...)
     """
     bucket_name = "test-bucket"
@@ -162,7 +162,7 @@ def mock_verified_email(ses_client) -> str:
         def test_email(mock_verified_email):
             # EmailService will use "sender@example.com"
             # All SES operations are mocked
-            email_service = get_email_service()
+            email_service = EmailService()
             email_service.send_email(...)
     """
     email = "sender@example.com"
@@ -174,3 +174,105 @@ def mock_verified_email(ses_client) -> str:
     os.environ["FROM_EMAIL"] = email
 
     return email
+
+
+@pytest.fixture(scope="function")
+def dynamodb_client(aws_credentials) -> Generator:
+    """
+    Create a mocked DynamoDB client for testing.
+
+    This fixture:
+    - Starts moto's mock_aws context
+    - Creates a boto3 DynamoDB client
+    - Yields the client for test use
+    - Automatically tears down after test completes
+
+    Usage in tests:
+        def test_something(dynamodb_client):
+            # DynamoDB operations here will be mocked
+            dynamodb_client.create_table(...)
+    """
+    with mock_aws():
+        yield boto3.client("dynamodb", region_name="us-east-1")
+
+
+@pytest.fixture(scope="function")
+def mock_dynamodb_table(dynamodb_client) -> str:
+    """
+    Create a mock DynamoDB table for testing.
+
+    This fixture:
+    - Uses the dynamodb_client fixture (which starts moto mocking)
+    - Creates a test table named "test-table" with id as partition key
+    - Sets DYNAMODB_TABLE env var (used by DynamoDBService)
+    - Returns the table name for test use
+
+    Usage in tests:
+        def test_dynamodb(mock_dynamodb_table):
+            # DynamoDBService will use "test-table"
+            # All DynamoDB operations are mocked
+            db_service = DynamoDBService()
+            db_service.put_item(...)
+    """
+    table_name = "test-table"
+
+    # Create table with simple schema (id as partition key)
+    dynamodb_client.create_table(
+        TableName=table_name,
+        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    # Set environment variable that DynamoDBService uses
+    os.environ["DYNAMODB_TABLE"] = table_name
+
+    return table_name
+
+
+@pytest.fixture(scope="function")
+def sqs_client(aws_credentials) -> Generator:
+    """
+    Create a mocked SQS client for testing.
+
+    This fixture:
+    - Starts moto's mock_aws context
+    - Creates a boto3 SQS client
+    - Yields the client for test use
+    - Automatically tears down after test completes
+
+    Usage in tests:
+        def test_something(sqs_client):
+            # SQS operations here will be mocked
+            sqs_client.create_queue(QueueName='test-queue')
+    """
+    with mock_aws():
+        yield boto3.client("sqs", region_name="us-east-1")
+
+
+@pytest.fixture(scope="function")
+def mock_sqs_queue(sqs_client) -> str:
+    """
+    Create a mock SQS queue for testing.
+
+    This fixture:
+    - Uses the sqs_client fixture (which starts moto mocking)
+    - Creates a test queue named "test-queue"
+    - Sets SQS_QUEUE_URL env var (used by SQSService)
+    - Returns the queue URL for test use
+
+    Usage in tests:
+        def test_sqs(mock_sqs_queue):
+            # SQSService will use "test-queue"
+            # All SQS operations are mocked
+            sqs_service = SQSService()
+            sqs_service.send_message("test message")
+    """
+    queue_name = "test-queue"
+    response = sqs_client.create_queue(QueueName=queue_name)
+    queue_url = response["QueueUrl"]
+
+    # Set environment variable that SQSService uses
+    os.environ["SQS_QUEUE_URL"] = queue_url
+
+    return queue_url
