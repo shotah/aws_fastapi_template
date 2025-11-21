@@ -9,34 +9,35 @@ A production-ready AWS Lambda template using SAM CLI, AWS Lambda Powertools, and
 ## 🏗️ Infrastructure Flow
 
 ```mermaid
-architecture-beta
-    group aws(logos:aws)[AWS Cloud]
+graph TB
+    Client[Client/User]
+    Route53[Route53<br/>Custom Domain]
+    APIGW[API Gateway<br/>IAM Auth]
+    Lambda[Lambda Function<br/>Python 3.13]
+    S3[S3 Bucket<br/>File Storage]
+    SES[SES<br/>Email Service]
+    EventBridge[EventBridge<br/>Scheduled Events]
+    CloudWatch[CloudWatch<br/>Alarms & Logs]
 
-    service client(logos:chrome)[Client]
-    service route53(logos:aws-route53)[Route53] in aws
-    service apigw(logos:aws-api-gateway)[API Gateway] in aws
-    service lambda(logos:aws-lambda)[Lambda Function] in aws
-    service eventbridge(logos:aws-eventbridge)[EventBridge] in aws
-    service s3(logos:aws-s3)[S3 Storage] in aws
-    service ses(logos:aws-simple-email-service)[SES Email] in aws
-    service cloudwatch(logos:aws-cloudwatch)[CloudWatch] in aws
+    Client -->|HTTPS Request| Route53
+    Route53 -->|DNS Resolution| APIGW
+    Client -.->|Direct Access| APIGW
+    APIGW -->|AWS SigV4 Auth| Lambda
+    EventBridge -->|Cron Schedule| Lambda
+    Lambda -->|Upload/Download| S3
+    Lambda -->|Send Emails| SES
+    Lambda -->|Logs & Metrics| CloudWatch
+    CloudWatch -.->|Monitors| Lambda
 
-    client:R --> L:route53{group}
-    route53:R --> L:apigw
-    apigw:B --> T:lambda
-    eventbridge:L --> R:lambda
-    lambda:R --> L:s3
-    lambda:B --> T:ses
-    lambda:R --> L:cloudwatch
+    style Lambda fill:#ff9900,stroke:#232f3e,stroke-width:3px,color:#fff
+    style APIGW fill:#ff4f8b,stroke:#232f3e,stroke-width:2px,color:#fff
+    style S3 fill:#3b48cc,stroke:#232f3e,stroke-width:2px,color:#fff
+    style SES fill:#dd344c,stroke:#232f3e,stroke-width:2px,color:#fff
+    style EventBridge fill:#e8684a,stroke:#232f3e,stroke-width:2px,color:#fff
+    style CloudWatch fill:#f58534,stroke:#232f3e,stroke-width:2px,color:#fff
+    style Route53 fill:#8c4fff,stroke:#232f3e,stroke-width:2px,color:#fff
+    style Client fill:#232f3e,stroke:#ff9900,stroke-width:2px,color:#fff
 ```
-
-**Connection Flow:**
-
-- Client → Route53 → API Gateway → Lambda (HTTPS requests with IAM authentication)
-- EventBridge → Lambda (Scheduled cron jobs at midnight UTC)
-- Lambda → S3 (File upload/download operations)
-- Lambda → SES (Email sending)
-- Lambda → CloudWatch (Logs, metrics, and monitoring)
 
 **What's Deployed:**
 
