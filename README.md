@@ -9,33 +9,34 @@ A production-ready AWS Lambda template using SAM CLI, AWS Lambda Powertools, and
 ## 🏗️ Infrastructure Flow
 
 ```mermaid
-graph TB
-    Client[Client/User]
-    Route53[Route53<br/>Custom Domain]
-    APIGW[API Gateway<br/>IAM Auth]
-    Lambda[Lambda Function<br/>Python 3.13]
-    S3[S3 Bucket<br/>File Storage]
-    SES[SES<br/>Email Service]
-    EventBridge[EventBridge<br/>Scheduled Events]
-    CloudWatch[CloudWatch<br/>Alarms & Logs]
+architecture-beta
+    group aws(logos:aws)[AWS Cloud]
 
-    Client -->|HTTPS Request| Route53
-    Route53 -->|DNS Resolution| APIGW
-    Client -.->|Direct Access| APIGW
-    APIGW -->|AWS SigV4 Auth| Lambda
-    EventBridge -->|Cron Schedule| Lambda
-    Lambda -->|Upload/Download| S3
-    Lambda -->|Send Emails| SES
-    Lambda -->|Logs & Metrics| CloudWatch
-    CloudWatch -.->|Monitors| Lambda
+    service client(logos:chrome)[Client]
+    service route53(logos:aws-route53)[Route53] in aws
+    service apigw(logos:aws-api-gateway)[API Gateway] in aws
+    service lambda(logos:aws-lambda)[Lambda Function] in aws
+    service eventbridge(logos:aws-eventbridge)[EventBridge] in aws
+    service s3(logos:aws-s3)[S3 Storage] in aws
+    service ses(logos:aws-simple-email-service)[SES Email] in aws
+    service cloudwatch(logos:aws-cloudwatch)[CloudWatch] in aws
 
-    style Lambda fill:#ff9900,stroke:#232f3e,stroke-width:3px,color:#fff
-    style APIGW fill:#ff4f8b,stroke:#232f3e,stroke-width:2px,color:#fff
-    style S3 fill:#3b48cc,stroke:#232f3e,stroke-width:2px,color:#fff
-    style SES fill:#dd344c,stroke:#232f3e,stroke-width:2px,color:#fff
-    style EventBridge fill:#e8684a,stroke:#232f3e,stroke-width:2px,color:#fff
-    style CloudWatch fill:#f58534,stroke:#232f3e,stroke-width:2px,color:#fff
+    client:R --> L:route53{group}
+    route53:R --> L:apigw
+    apigw:B --> T:lambda
+    eventbridge:L --> R:lambda
+    lambda:R --> L:s3
+    lambda:B --> T:ses
+    lambda:R --> L:cloudwatch
 ```
+
+**Connection Flow:**
+
+- Client → Route53 → API Gateway → Lambda (HTTPS requests with IAM authentication)
+- EventBridge → Lambda (Scheduled cron jobs at midnight UTC)
+- Lambda → S3 (File upload/download operations)
+- Lambda → SES (Email sending)
+- Lambda → CloudWatch (Logs, metrics, and monitoring)
 
 **What's Deployed:**
 
@@ -45,6 +46,55 @@ graph TB
 - **SES** - Email sending capabilities
 - **EventBridge** - Scheduled cron jobs (nightly at midnight UTC)
 - **CloudWatch** - Alarms for errors and throttles
+- **Route53** - DNS management for custom domains (optional)
+
+---
+
+## 📊 Request Flow Diagrams
+
+### API Request Flow (File Upload Example)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant APIGW as API Gateway
+    participant Lambda as Lambda Function
+    participant S3 as S3 Bucket
+    participant CW as CloudWatch
+
+    User->>APIGW: POST /files (IAM SigV4 signed)
+    APIGW->>APIGW: Validate IAM signature
+    APIGW->>Lambda: Invoke with event
+    activate Lambda
+    Lambda->>CW: Log request received
+    Lambda->>Lambda: Validate request (Pydantic)
+    Lambda->>S3: Upload file
+    S3-->>Lambda: Upload success
+    Lambda->>CW: Log & emit metrics
+    Lambda-->>APIGW: 200 OK (unified response)
+    deactivate Lambda
+    APIGW-->>User: {"success": true, "data": {...}}
+```
+
+### Scheduled Email Flow
+
+```mermaid
+sequenceDiagram
+    participant EB as EventBridge
+    participant Lambda as Lambda Function
+    participant SES as SES
+    participant CW as CloudWatch
+
+    EB->>Lambda: Cron trigger (midnight UTC)
+    activate Lambda
+    Lambda->>CW: Log scheduled job start
+    Lambda->>Lambda: Generate daily report
+    Lambda->>SES: Send email to admin
+    SES-->>Lambda: Email sent
+    Lambda->>CW: Log success & emit metrics
+    Lambda-->>EB: Execution complete
+    deactivate Lambda
+```
 
 ---
 
