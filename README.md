@@ -13,19 +13,31 @@ graph TB
     Client[Client/User]
     Route53[Route53<br/>Custom Domain]
     APIGW[API Gateway<br/>IAM Auth]
-    Lambda[Lambda Function<br/>Python 3.13]
-    S3[S3 Bucket<br/>File Storage]
-    SES[SES<br/>Email Service]
     EventBridge[EventBridge<br/>Scheduled Events]
     CloudWatch[CloudWatch<br/>Alarms & Logs]
+
+    subgraph VPC[VPC - Network Isolation]
+        subgraph PrivateSubnets[Private Subnets]
+            Lambda[Lambda Function<br/>Python 3.13]
+            ENI[ENI]
+        end
+        S3Endpoint[S3 VPC Endpoint]
+        SESEndpoint[SES VPC Endpoint]
+    end
+
+    S3[S3 Bucket<br/>File Storage]
+    SES[SES<br/>Email Service]
 
     Client -->|HTTPS Request| Route53
     Route53 -->|DNS Resolution| APIGW
     Client -.->|Direct Access| APIGW
     APIGW -->|AWS SigV4 Auth| Lambda
     EventBridge -->|Cron Schedule| Lambda
-    Lambda -->|Upload/Download| S3
-    Lambda -->|Send Emails| SES
+    Lambda --- ENI
+    ENI -->|Private Link| S3Endpoint
+    ENI -->|Private Link| SESEndpoint
+    S3Endpoint -->|Upload/Download| S3
+    SESEndpoint -->|Send Emails| SES
     Lambda -->|Logs & Metrics| CloudWatch
     CloudWatch -.->|Monitors| Lambda
 
@@ -37,10 +49,17 @@ graph TB
     style CloudWatch fill:#f58534,stroke:#232f3e,stroke-width:2px,color:#fff
     style Route53 fill:#8c4fff,stroke:#232f3e,stroke-width:2px,color:#fff
     style Client fill:#232f3e,stroke:#ff9900,stroke-width:2px,color:#fff
+    style VPC fill:#248814,stroke:#232f3e,stroke-width:3px,color:#fff
+    style PrivateSubnets fill:#1a6b0f,stroke:#232f3e,stroke-width:2px,color:#fff
+    style S3Endpoint fill:#1a6b0f,stroke:#3b48cc,stroke-width:2px,color:#fff
+    style SESEndpoint fill:#1a6b0f,stroke:#dd344c,stroke-width:2px,color:#fff
+    style ENI fill:#ff9900,stroke:#232f3e,stroke-width:1px,color:#fff
 ```
 
 **What's Deployed:**
 
+- **VPC** - Network isolation with private subnets (optional, NIST 800-53 SC-7 compliant)
+- **VPC Endpoints** - Private connectivity to S3 and SES (no internet required)
 - **API Gateway** - RESTful API with IAM authentication (optional custom domain)
 - **Lambda Function** - Python 3.13 with Powertools for logging, tracing, and metrics
 - **S3 Bucket** - Encrypted storage with versioning enabled
@@ -59,7 +78,10 @@ graph TB
 sequenceDiagram
     actor User
     participant APIGW as API Gateway
-    participant Lambda as Lambda Function
+    box rgb(36, 136, 20) VPC (Private Subnets)
+        participant Lambda as Lambda Function
+        participant VPCE as S3 VPC Endpoint
+    end
     participant S3 as S3 Bucket
     participant CW as CloudWatch
 
@@ -69,8 +91,10 @@ sequenceDiagram
     activate Lambda
     Lambda->>CW: Log request received
     Lambda->>Lambda: Validate request (Pydantic)
-    Lambda->>S3: Upload file
-    S3-->>Lambda: Upload success
+    Lambda->>VPCE: Upload via PrivateLink
+    VPCE->>S3: Upload file
+    S3-->>VPCE: Upload success
+    VPCE-->>Lambda: Response
     Lambda->>CW: Log & emit metrics
     Lambda-->>APIGW: 200 OK (unified response)
     deactivate Lambda
@@ -82,7 +106,10 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant EB as EventBridge
-    participant Lambda as Lambda Function
+    box rgb(36, 136, 20) VPC (Private Subnets)
+        participant Lambda as Lambda Function
+        participant VPCE as SES VPC Endpoint
+    end
     participant SES as SES
     participant CW as CloudWatch
 
@@ -90,8 +117,10 @@ sequenceDiagram
     activate Lambda
     Lambda->>CW: Log scheduled job start
     Lambda->>Lambda: Generate daily report
-    Lambda->>SES: Send email to admin
-    SES-->>Lambda: Email sent
+    Lambda->>VPCE: Send via PrivateLink
+    VPCE->>SES: Send email to admin
+    SES-->>VPCE: Email sent
+    VPCE-->>Lambda: Response
     Lambda->>CW: Log success & emit metrics
     Lambda-->>EB: Execution complete
     deactivate Lambda
@@ -248,7 +277,7 @@ def test_upload(mock_s3_bucket):
 
 ## 📁 Project Structure
 
-```
+```text
 .
 ├── src/
 │   ├── app.py              # Routes only (clean!)
@@ -438,6 +467,8 @@ Complete guides available in `/docs`:
 ✅ 98%+ test coverage
 ✅ Scheduled event support
 ✅ Pre-configured IAM roles
+✅ VPC network isolation (optional, NIST 800-53 SC-7)
+✅ VPC Endpoints for private AWS service access
 
 ### **What You Need to Add**
 
@@ -446,6 +477,7 @@ Complete guides available in `/docs`:
 - Rate limiting
 - CORS configuration (if needed)
 - API Gateway custom domain
+- VPC Endpoints (if using VPC without NAT Gateway)
 
 ---
 

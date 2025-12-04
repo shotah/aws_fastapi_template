@@ -44,7 +44,9 @@ parameter_overrides = [
   # VPC Configuration (NIST 800-53 SC-7) - uncomment to enable:
   # "VpcId=vpc-xxxxxxxxx",
   # "SubnetIds=subnet-aaaa,subnet-bbbb",
-  # "SecurityGroupIds=sg-xxxxxxxxx"
+  # "SecurityGroupIds=sg-xxxxxxxxx",
+  # Cross-stack S3 access - uncomment to grant access to another service's bucket:
+  # "ExternalBucketArn=arn:aws:s3:::other-service-bucket"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -76,7 +78,9 @@ parameter_overrides = [
   # VPC Configuration (NIST 800-53 SC-7) - uncomment to enable:
   # "VpcId=vpc-xxxxxxxxx",
   # "SubnetIds=subnet-aaaa,subnet-bbbb",
-  # "SecurityGroupIds=sg-xxxxxxxxx"
+  # "SecurityGroupIds=sg-xxxxxxxxx",
+  # Cross-stack S3 access - uncomment to grant access to another service's bucket:
+  # "ExternalBucketArn=arn:aws:s3:::other-service-bucket"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -109,6 +113,8 @@ parameter_overrides = [
   # "VpcId=vpc-xxxxxxxxx",
   # "SubnetIds=subnet-aaaa,subnet-bbbb",
   # "SecurityGroupIds=sg-xxxxxxxxx",
+  # Cross-stack S3 access - uncomment to grant access to another service's bucket:
+  # "ExternalBucketArn=arn:aws:s3:::other-service-bucket",
   # Add your production-specific parameters:
   # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/prod-lambda-role"
 ]

@@ -76,11 +76,23 @@ Parameters:
     Description: Comma-separated list of security group IDs. Required if VpcId is set.
     Default: ""
 
+  # Cross-Stack S3 Access (Import another service's bucket)
+  # Use Fn::ImportValue in the parameter override to import from another stack:
+  #   ExternalBucketArn=!ImportValue other-stack-DataBucketArn
+  # Or pass the ARN directly:
+  #   ExternalBucketArn=arn:aws:s3:::other-bucket-name
+  ExternalBucketArn:
+    Type: String
+    Description: ARN of an external S3 bucket this Lambda needs access to. Leave empty to skip.
+    Default: ""
+
 Conditions:
   # Condition to check if custom domain should be configured
   HasCustomDomain: !Not [!Equals [!Ref BaseDomain, ""]]
   # Condition to check if VPC configuration should be applied (NIST 800-53 SC-7)
   HasVpcConfig: !Not [!Equals [!Ref VpcId, ""]]
+  # Condition to check if external bucket access is needed
+  HasExternalBucket: !Not [!Equals [!Ref ExternalBucketArn, ""]]
 
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
@@ -311,6 +323,21 @@ Resources:
         # Allow sending emails via SES
         - SESCrudPolicy:
             IdentityName: "*"
+        # Cross-stack S3 access - allow access to external bucket from another service
+        - !If
+          - HasExternalBucket
+          - Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Ref ExternalBucketArn
+                  - !Sub "${ExternalBucketArn}/*"
+          - !Ref "AWS::NoValue"
         # Add more policies as needed:
         # - DynamoDBCrudPolicy:
         #     TableName: !Ref MyTable
@@ -711,6 +738,12 @@ Outputs:
     Value: !Ref DataBucket
     Export:
       Name: !Sub "${AWS::StackName}-DataBucketName"
+
+  DataBucketArn:
+    Description: S3 Data Bucket ARN (for IAM policies in other stacks)
+    Value: !GetAtt DataBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DataBucketArn"
 
   # ============================================================================
   # Custom Domain Outputs

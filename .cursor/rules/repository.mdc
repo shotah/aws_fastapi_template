@@ -1,0 +1,75 @@
+---
+alwaysApply: true
+---
+
+# AWS FastAPI Template - Repository Rules
+
+## Core Principles
+
+1. **Principle of Least Change** - Only modify what's necessary to solve the problem. Avoid scope creep and unnecessary refactoring.
+
+2. **Campsite Rule** - Leave code cleaner than you found it, but balance this with least change. Fix obvious issues in code you're touching, don't go hunting.
+
+3. **Import Over Implement** - Prefer well-maintained libraries over custom implementations. The best code is no code.
+
+4. **Test Everything** - Never assume changes work. Run `pipenv run pytest` to verify. Target 75%+ coverage.
+
+5. **Fix All Lints** - No lint errors in committed code. Run linting before considering work complete.
+
+## Project Structure
+
+- `src/` - Lambda application code (app.py is the entry point)
+- `src/services/` - AWS service wrappers (S3, SES, DynamoDB, SQS) with singleton pattern
+- `tests/` - Pytest tests using moto for AWS mocking
+- `template.yaml` - SAM/CloudFormation infrastructure definition
+- `samconfig.toml` - SAM deployment configurations per environment
+
+## Code Patterns
+
+### Services (boto3 clients)
+
+- Services use singleton pattern via `__new__` for connection reuse
+- Clients are cached at module level for Lambda cold start optimization
+- Always use the service classes, never raw boto3 in app.py
+
+### API Endpoints
+
+- Use `@unified_response` decorator for consistent API response format
+- Use Pydantic models from `models.py` for request/response validation
+- Raise custom exceptions from `exceptions.py` - they're auto-handled
+
+### Testing
+
+- Use fixtures from `conftest.py` for AWS mocking (moto)
+- Clear singleton connections between tests with `Service.clear_connections()`
+- Tests should be isolated - no real AWS calls
+
+## AWS/SAM Conventions
+
+- Use Parameters with conditions for optional features (see VPC, custom domain patterns)
+- Use `!If` with `AWS::NoValue` for conditional resource properties
+- Environment-specific configs go in `samconfig.toml`
+- Never hardcode AWS account IDs, regions, or secrets
+
+## Commands
+
+```bash
+# Run tests
+pipenv run pytest -v
+
+# Run tests with coverage
+pipenv run pytest --cov
+
+# Deploy to environment
+sam build && sam deploy --config-env dev
+
+# Local API testing
+sam local start-api --env-vars env.json
+```
+
+## Style Guide
+
+- Python 3.13+ features are allowed
+- Type hints required on all function signatures
+- Docstrings on public functions and classes
+- Use `logger` from aws_lambda_powertools, not print()
