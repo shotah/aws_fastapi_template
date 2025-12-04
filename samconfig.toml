@@ -41,6 +41,10 @@ parameter_overrides = [
   "LogLevel=DEBUG",
   "FromEmail=your-verified-email@example.com",
   "AdminEmail=admin@example.com"
+  # VPC Configuration (NIST 800-53 SC-7) - uncomment to enable:
+  # "VpcId=vpc-xxxxxxxxx",
+  # "SubnetIds=subnet-aaaa,subnet-bbbb",
+  # "SecurityGroupIds=sg-xxxxxxxxx"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -69,6 +73,10 @@ parameter_overrides = [
   "LogLevel=INFO",
   "FromEmail=your-verified-email@example.com",
   "AdminEmail=admin@example.com"
+  # VPC Configuration (NIST 800-53 SC-7) - uncomment to enable:
+  # "VpcId=vpc-xxxxxxxxx",
+  # "SubnetIds=subnet-aaaa,subnet-bbbb",
+  # "SecurityGroupIds=sg-xxxxxxxxx"
 ]
 # Optionally specify region and profile:
 # region = "us-east-1"
@@ -97,6 +105,10 @@ parameter_overrides = [
   "LogLevel=WARNING",
   "FromEmail=your-verified-email@example.com",
   "AdminEmail=admin@example.com"
+  # VPC Configuration (NIST 800-53 SC-7) - uncomment to enable:
+  # "VpcId=vpc-xxxxxxxxx",
+  # "SubnetIds=subnet-aaaa,subnet-bbbb",
+  # "SecurityGroupIds=sg-xxxxxxxxx",
   # Add your production-specific parameters:
   # "LambdaExecutionRoleArn=arn:aws:iam::123456789012:role/prod-lambda-role"
 ]

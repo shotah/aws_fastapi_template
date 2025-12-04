@@ -22,6 +22,22 @@ from models import (
 from services.email import EmailService  # type: ignore
 from services.storage import StorageService  # type: ignore
 
+# ============================================================================
+# Eager initialization of boto3 clients (cold start optimization)
+# ============================================================================
+# boto3 clients are created once at module load (cold start) and cached.
+# This moves ~50-100ms of client creation from first request to cold start.
+# The singleton pattern in each service ensures these same instances are reused.
+#
+# Trade-off: If a service isn't used in every invocation, you pay the cost anyway.
+# For most Lambda use cases, this is worth it for faster first-request latency.
+#
+# Conditional init: Only if env vars are set (allows tests to import without error)
+if os.getenv("DATA_BUCKET"):
+    _storage_service = StorageService()
+if os.getenv("FROM_EMAIL"):
+    _email_service = EmailService()
+
 app = APIGatewayRestResolver(enable_validation=True)
 tracer = Tracer()
 logger = Logger()

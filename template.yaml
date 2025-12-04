@@ -59,9 +59,28 @@ Parameters:
     Description: Route53 Hosted Zone ID for base domain. Required if BaseDomain is set.
     Default: ""
 
+  # VPC Configuration (Required for NIST 800-53 SC-7 Boundary Protection)
+  # Lambda will be deployed in private subnets with controlled egress
+  VpcId:
+    Type: String
+    Description: VPC ID for Lambda network isolation. Leave empty to skip VPC configuration.
+    Default: ""
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: Comma-separated list of private subnet IDs (min 2 for HA). Required if VpcId is set.
+    Default: ""
+
+  SecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: Comma-separated list of security group IDs. Required if VpcId is set.
+    Default: ""
+
 Conditions:
   # Condition to check if custom domain should be configured
   HasCustomDomain: !Not [!Equals [!Ref BaseDomain, ""]]
+  # Condition to check if VPC configuration should be applied (NIST 800-53 SC-7)
+  HasVpcConfig: !Not [!Equals [!Ref VpcId, ""]]
 
 Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
   Function:
@@ -84,6 +103,44 @@ Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/devel
       ManagedBy: SAM
 
 Resources:
+  # ============================================================================
+  # VPC Endpoints (Required when Lambda is in VPC without NAT Gateway)
+  # ============================================================================
+  # When Lambda is deployed in a VPC (NIST 800-53 SC-7), it loses direct internet
+  # access. Create VPC Endpoints for AWS services the Lambda needs to call:
+  #
+  # Required for this template:
+  #   - com.amazonaws.REGION.s3 (Gateway endpoint - free)
+  #   - com.amazonaws.REGION.email-smtp (Interface endpoint for SES)
+  #
+  # Optional (based on your usage):
+  #   - com.amazonaws.REGION.dynamodb (Gateway endpoint - free)
+  #   - com.amazonaws.REGION.sqs (Interface endpoint)
+  #   - com.amazonaws.REGION.secretsmanager (Interface endpoint)
+  #   - com.amazonaws.REGION.logs (Interface endpoint for CloudWatch Logs)
+  #
+  # Example VPC Endpoint (uncomment and modify as needed):
+  # S3VpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Condition: HasVpcConfig
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+  #     VpcEndpointType: Gateway
+  #     RouteTableIds:
+  #       - rtb-xxxxxxxxx  # Replace with your private subnet route table IDs
+  #
+  # SESVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Condition: HasVpcConfig
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.email-smtp"
+  #     VpcEndpointType: Interface
+  #     SubnetIds: !Ref SubnetIds
+  #     SecurityGroupIds: !Ref SecurityGroupIds
+  #     PrivateDnsEnabled: true
+
   # ============================================================================
   # ACM Certificate (Auto-created and validated via Route53)
   # ============================================================================
@@ -225,8 +282,29 @@ Resources:
       # 2. Either set LambdaExecutionRoleArn parameter or replace with actual ARN
       # Role: !Ref LambdaExecutionRoleArn
       # If Role is not specified, SAM will create one with basic Lambda execution permissions
+      # VPC Configuration (NIST 800-53 SC-7 Boundary Protection)
+      # Enables network isolation in private subnets with controlled egress
+      VpcConfig: !If
+        - HasVpcConfig
+        - SecurityGroupIds: !Ref SecurityGroupIds
+          SubnetIds: !Ref SubnetIds
+        - !Ref "AWS::NoValue"
       # IAM Policies for the Lambda function
       Policies:
+        # VPC access policy - required for Lambda to create ENIs in VPC (NIST 800-53 SC-7)
+        - !If
+          - HasVpcConfig
+          - Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+                Resource: "*"
+          - !Ref "AWS::NoValue"
         # Allow S3 access to the DataBucket
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -653,6 +731,19 @@ Outputs:
     Value: !Ref ApiCertificate
     Export:
       Name: !Sub "${AWS::StackName}-CertificateArn"
+
+  # ============================================================================
+  # VPC Outputs (NIST 800-53 SC-7)
+  # ============================================================================
+  LambdaVpcId:
+    Condition: HasVpcConfig
+    Description: VPC ID where Lambda is deployed for network isolation
+    Value: !Ref VpcId
+
+  LambdaSubnets:
+    Condition: HasVpcConfig
+    Description: Subnet IDs where Lambda ENIs are created
+    Value: !Join [",", !Ref SubnetIds]
 
   # ============================================================================
   # S3 Outputs (Commented Examples)
